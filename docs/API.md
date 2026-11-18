@@ -70,7 +70,7 @@ Errors: `BUNDLE-001` malformed/invalid content type (400/415), `BUNDLE-002` comp
 
 Maximum request body is `limits.maxBodyBytes` (default 5 MB, 5242880 bytes). Oversized bodies return `413 BUNDLE-007`.
 
-Idempotency: retries are checked **before** any insert. Retrying a quarantined bundle returns `200 { "status": "quarantined", "reason": ... }` with no new row; retrying an accepted bundle returns `duplicate`.
+Idempotency: retries are checked **before** any insert. Retrying a quarantined bundle returns `200 { "status": "quarantined", "reason": ... }`; retrying a still-pending bundle returns `200 { "status": "pending_parent" }`; retrying a settled accepted bundle returns `duplicate`. `duplicate` means stored and settled under the same bundle hash — never pending.
 
 ## Pull bundles
 

@@ -73,17 +73,11 @@ export class IngestService {
         if (byId.bundleHash !== bundle.bundleHash) {
           throw new ApiError(409, "BUNDLE-006", "Bundle id already used with different content.");
         }
-        if (byId.status === "quarantined") {
-          return { status: "quarantined" as const, reason: byId.quarantineReason ?? "unknown" };
-        }
-        return { status: "duplicate" as const, hubSeq: byId.hubSeq };
+        return this.existingResult(byId.status, byId.quarantineReason, byId.hubSeq);
       }
       const byHash = this.bundles.findByBundleHash(bundle.bundleHash);
       if (byHash) {
-        if (byHash.status === "quarantined") {
-          return { status: "quarantined" as const, reason: byHash.quarantineReason ?? "unknown" };
-        }
-        return { status: "duplicate" as const, hubSeq: byHash.hubSeq };
+        return this.existingResult(byHash.status, byHash.quarantineReason, byHash.hubSeq);
       }
 
       // Hash mismatch -> quarantine (only for genuinely new bundles).
@@ -261,6 +255,18 @@ export class IngestService {
 
     // If accepted, result already includes. If quarantined/pending/duplicate okay.
     return result;
+  }
+
+  private existingResult(
+    status: string,
+    quarantineReason: string | null,
+    hubSeq: number,
+  ): IngestResult {
+    if (status === "pending_parent") return { status: "pending_parent" };
+    if (status === "quarantined") {
+      return { status: "quarantined", reason: quarantineReason ?? "unknown" };
+    }
+    return { status: "duplicate", hubSeq };
   }
 
   private eventExists(eventId: string): boolean {

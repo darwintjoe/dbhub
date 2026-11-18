@@ -65,6 +65,29 @@ describe("idempotency before insert (P1-2)", () => {
     }
   });
 
+  it("pending retry returns pending_parent until the parent arrives", () => {
+    const ctx = makeCtx();
+    try {
+      const d = addDevice(ctx);
+      const svc = service(ctx);
+      const b1 = makeBundle(d.id, null, 1);
+      const b2 = makeBundle(d.id, b1.bundleHash, 2);
+      const b3 = makeBundle(d.id, b2.bundleHash, 3);
+
+      expect(svc.ingest(b1, d)).toMatchObject({ status: "accepted" });
+      expect(svc.ingest(b3, d)).toEqual({ status: "pending_parent" });
+      expect(svc.ingest(b3, d)).toEqual({ status: "pending_parent" });
+      expect(ctx.bundles.countAll()).toBe(2);
+
+      expect(svc.ingest(b2, d)).toMatchObject({ status: "accepted" });
+      expect(ctx.bundles.findByBundleId(b3.bundleId)?.status).toBe("accepted");
+      expect(svc.ingest(b3, d)).toMatchObject({ status: "duplicate" });
+      expect(ctx.bundles.countAll()).toBe(3);
+    } finally {
+      ctx.cleanup();
+    }
+  });
+
   it("duplicate accepted retry adds no row", () => {
     const ctx = makeCtx();
     try {
