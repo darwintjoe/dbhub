@@ -94,7 +94,7 @@ function main() {
   app.use("/api/v1/admin", adminAuth);
   app.use("/api/v1/admin/devices", devicesRoutes(config, devices, audit));
   app.use("/api/v1/admin/quarantine", quarantineRoutes(bundles));
-  app.use("/api/v1/admin/maintenance", maintenanceRoutes(maintenance, batching, outbox));
+  app.use("/api/v1/admin/maintenance", maintenanceRoutes(maintenance, outbox));
 
   const deviceAuth = requireDevice(devices);
   app.use("/api/v1/relay", deviceAuth, relayRoutes(ingest, devices));

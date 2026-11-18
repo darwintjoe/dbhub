@@ -109,7 +109,7 @@ export function makeApp(ctx: TestCtx) {
   app.use("/api/v1/admin", requireAdmin(ctx.config));
   app.use("/api/v1/admin/devices", devicesRoutes(ctx.config, ctx.devices, ctx.audit));
   app.use("/api/v1/admin/quarantine", quarantineRoutes(ctx.bundles));
-  app.use("/api/v1/admin/maintenance", maintenanceRoutes(maintenance, batching, ctx.outbox));
+  app.use("/api/v1/admin/maintenance", maintenanceRoutes(maintenance, ctx.outbox));
   app.use("/api/v1/relay", requireDevice(ctx.devices), relayRoutes(ingest, ctx.devices));
   app.use("/api/v1/pull", requireDevice(ctx.devices), pullRoutes(ctx.bundles));
   app.use("/api/v1/manifest", requireDevice(ctx.devices), manifestRoutes(ctx.config, ctx.manifests));

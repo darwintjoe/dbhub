@@ -1,14 +1,9 @@
 ﻿import type { Request, Response } from "express";
 import { Router } from "express";
 import type { MaintenanceService } from "../../services/maintenance";
-import type { BatchingService } from "../../services/batching";
 import type { OutboxRepo } from "../../db/outbox.repo";
 
-export function maintenanceRoutes(
-  maintenance: MaintenanceService,
-  batching: BatchingService,
-  outbox: OutboxRepo,
-) {
+export function maintenanceRoutes(maintenance: MaintenanceService, outbox: OutboxRepo) {
   const router = Router();
   router.post("/verify-chain", (_req: Request, res: Response) => {
     res.json(maintenance.verifyChain());
@@ -19,10 +14,6 @@ export function maintenanceRoutes(
   });
   router.get("/outbox", (_req: Request, res: Response) => {
     res.json({ counts: outbox.counts(), lastErrors: outbox.lastErrors() });
-  });
-  router.post("/run-outbox", async (_req: Request, res: Response) => {
-    await batching.processOnce();
-    res.json({ ok: true });
   });
   return router;
 }
