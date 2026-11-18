@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
-const target = process.env.FAZAI_HUB_CONFIG || process.argv[2] || path.resolve(process.cwd(), "config.json");
+const target = process.env.DBHUB_CONFIG || process.argv[2] || path.resolve(process.cwd(), "config.json");
 const companyId = `cmp_${crypto.randomUUID()}`;
 const replicaId = `hub_${crypto.randomUUID()}`;
 const adminToken = `fzh_${crypto.randomBytes(32).toString("base64url")}`;

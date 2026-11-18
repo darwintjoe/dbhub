@@ -38,9 +38,9 @@ export type Config = z.infer<typeof configSchema>;
 
 function candidatePaths(): string[] {
   const out: string[] = [];
-  if (process.env.FAZAI_HUB_CONFIG) out.push(process.env.FAZAI_HUB_CONFIG);
+  if (process.env.DBHUB_CONFIG) out.push(process.env.DBHUB_CONFIG);
   const programData = process.env.PROGRAMDATA || "C:\\ProgramData";
-  out.push(path.join(programData, "FazaiHub", "config.json"));
+  out.push(path.join(programData, "DBHub", "config.json"));
   out.push(path.resolve(process.cwd(), "config.json"));
   return out;
 }
@@ -54,7 +54,7 @@ export function resolveConfigPath(): string {
     }
   }
   throw new Error(
-    "Config file not found. Set FAZAI_HUB_CONFIG or create ./config.json. Run `npm run config:init`.",
+    "Config file not found. Set DBHUB_CONFIG or create ./config.json. Run `npm run config:init`.",
   );
 }
 

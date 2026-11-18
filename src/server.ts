@@ -28,7 +28,7 @@ import { uiHandler } from "./http/ui";
 function main() {
   const { config, path: configPath } = loadConfig();
   const logger = createLogger(config);
-  logger.info({ configPath, dataDir: config.dataDir, version: "0.1.2" }, "starting fazai-hub");
+  logger.info({ configPath, dataDir: config.dataDir, version: "0.2.0" }, "starting dbhub");
 
   const db = openDatabase(config);
   const bundles = new BundlesRepo(db);
@@ -83,7 +83,7 @@ function main() {
   app.use(rateLimitMiddleware(config));
 
   app.get("/healthz", (_req, res) => {
-    res.json({ ok: true, version: "0.1.2" });
+    res.json({ ok: true, version: "0.2.0" });
   });
 
   app.get("/", uiHandler(config, bundles, devices));

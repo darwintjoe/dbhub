@@ -2,12 +2,12 @@
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
-$ConfigDir = "C:\ProgramData\FazaiHub"
+$ConfigDir = "C:\ProgramData\DBHub"
 $ConfigPath = Join-Path $ConfigDir "config.json"
 $DataDir = Join-Path $ConfigDir "data"
 $LogDir = Join-Path $ConfigDir "logs"
 
-Write-Host "FAZAI Hub install (elevated)"
+Write-Host "DBHub install (elevated)"
 Set-Location $Root
 
 Write-Host "[1/6] npm ci"
@@ -23,7 +23,7 @@ New-Item -ItemType Directory -Force -Path $ConfigDir, $DataDir, $LogDir | Out-Nu
 
 if (-not (Test-Path $ConfigPath)) {
   Write-Host "[4/6] generate config (admin token printed once)"
-  $env:FAZAI_HUB_CONFIG = $ConfigPath
+  $env:DBHUB_CONFIG = $ConfigPath
   node scripts/config-init.mjs $ConfigPath
   if ($LASTEXITCODE -ne 0) { throw "config init failed" }
   $cfg = Get-Content $ConfigPath -Raw | ConvertFrom-Json
@@ -35,15 +35,15 @@ if (-not (Test-Path $ConfigPath)) {
 } else {
   Write-Host "[4/6] config already exists; keeping it"
 }
-$env:FAZAI_HUB_CONFIG = $ConfigPath
+$env:DBHUB_CONFIG = $ConfigPath
 
 Write-Host "[5/6] install and start Windows service"
 npm run service:install
 if ($LASTEXITCODE -ne 0) { throw "service install failed" }
 
 Write-Host "[6/6] add firewall rule"
-netsh advfirewall firewall delete rule name="Fazai Hub" | Out-Null
-netsh advfirewall firewall add rule name="Fazai Hub" dir=in action=allow protocol=TCP localport=8787
+netsh advfirewall firewall delete rule name="DBHub" | Out-Null
+netsh advfirewall firewall add rule name="DBHub" dir=in action=allow protocol=TCP localport=8787
 if ($LASTEXITCODE -ne 0) { throw "firewall rule failed" }
 
-Write-Host "Done. Check with: sc query FazaiHub"
+Write-Host "Done. Check with: sc query DBHub"

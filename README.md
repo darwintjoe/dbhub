@@ -1,4 +1,4 @@
-# FAZAI Hub v0
+# DBHub v0
 
 Standalone local sync hub for one company's devices. Windows service, HTTP LAN ingest, SQLite replica, verified local chain, read-only dashboard. No outbound network calls in v0.
 
@@ -38,7 +38,7 @@ npm run simulate
 node scripts/verify-chain.mjs data/hub.sqlite
 ```
 
-Elevated install: `.\scripts\install.ps1`. Check: `sc.exe query FazaiHub`.
+Elevated install: `.\scripts\install.ps1`. Check: `sc.exe query DBHub`.
 
 ## v0 limits
 

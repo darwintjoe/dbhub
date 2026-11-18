@@ -1,4 +1,4 @@
-export const VERSION = "0.1.2";
+export const VERSION = "0.2.0";
 export const SUPPORTED_SCHEMA_VERSION = 1;
 export const SUPPORTED_BUNDLE_FORMAT_VERSION = 1;
 

@@ -108,7 +108,7 @@ CREATE TABLE audit_log (
 `;
 
 export function createV1Fixture(): V1Fixture {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fazai-v1-fixture-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dbhub-v1-fixture-"));
   const config = makeConfig(dir);
   const dbPath = path.join(dir, "hub.sqlite");
   const db = new Database(dbPath);

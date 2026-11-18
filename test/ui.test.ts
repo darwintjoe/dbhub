@@ -19,7 +19,7 @@ describe("dashboard UI", () => {
       const { app } = makeApp(ctx);
       const r = await request(app).get("/");
       expect(r.status).toBe(200);
-      expect(r.text).toContain("FAZAI Hub");
+      expect(r.text).toContain("DBHub");
       expect(r.text).toContain("Accepted: 1");
       expect(r.text).toContain("Verify chain");
       expect(r.text).not.toContain("SECRET_PAYLOAD_XYZ");

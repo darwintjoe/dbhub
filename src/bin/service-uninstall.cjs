@@ -1,7 +1,7 @@
 const Service = require("node-windows").Service;
 
 const svc = new Service({
-  name: "FazaiHub",
+  name: "DBHub",
   script: "",
 });
 
@@ -10,7 +10,7 @@ svc.on("stop", () => {
   svc.uninstall();
 });
 svc.on("uninstall", () => {
-  console.log("FazaiHub uninstalled.");
+  console.log("DBHub uninstalled.");
 });
 svc.on("error", (err) => {
   console.error("Service error:", err);

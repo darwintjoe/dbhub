@@ -4,10 +4,10 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-$ConfigDir = "C:\ProgramData\FazaiHub"
+$ConfigDir = "C:\ProgramData\DBHub"
 $Root = Split-Path -Parent $PSScriptRoot
 
-Write-Host "FAZAI Hub uninstall (elevated)"
+Write-Host "DBHub uninstall (elevated)"
 Set-Location $Root
 
 Write-Host "[1/3] stop and remove service"
@@ -15,7 +15,7 @@ npm run service:uninstall
 if ($LASTEXITCODE -ne 0) { Write-Warning "service uninstall returned non-zero; continuing" }
 
 Write-Host "[2/3] remove firewall rule"
-netsh advfirewall firewall delete rule name="Fazai Hub" | Out-Null
+netsh advfirewall firewall delete rule name="DBHub" | Out-Null
 
 if ($PurgeData) {
   $confirm = Read-Host "Type PURGE DATA to permanently delete $ConfigDir"

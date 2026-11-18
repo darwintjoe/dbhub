@@ -1,4 +1,4 @@
-# FAZAI Hub API v1
+# DBHub API v1
 
 Base URL: `http://<host>:8787`
 
@@ -17,7 +17,7 @@ Auth:
 
 ```bash
 curl http://localhost:8787/healthz
-# { "ok": true, "version": "0.1.2" }
+# { "ok": true, "version": "0.2.0" }
 ```
 
 ## Admin: create device

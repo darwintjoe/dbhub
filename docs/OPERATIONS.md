@@ -3,23 +3,23 @@
 ## Requirements
 
 - Windows 10/11 x64
-- **Node.js 22 LTS in production** (v0.1.2 target). Node 24 dev host is supported for building/testing only.
+- **Node.js 22 LTS in production** (v0.2.0 target). Node 24 dev host is supported for building/testing only.
 - Elevated PowerShell for install/uninstall
 
 ## Install
 
 ```powershell
-cd C:\path\to\fazai-hub
+cd C:\path\to\dbhub
 .\scripts\install.ps1
-sc.exe query FazaiHub
+sc.exe query DBHub
 curl http://localhost:8787/healthz
 ```
 
-The script: `npm ci`, `npm run build`, creates `C:\ProgramData\FazaiHub\{data,logs}`, generates `config.json` if missing (prints admin token once), installs/starts the service, sets recovery actions, and opens TCP 8787 in Windows Firewall.
+The script: `npm ci`, `npm run build`, creates `C:\ProgramData\DBHub\{data,logs}`, generates `config.json` if missing (prints admin token once), installs/starts the service, sets recovery actions, and opens TCP 8787 in Windows Firewall.
 
 Config path order:
-1. `FAZAI_HUB_CONFIG`
-2. `%PROGRAMDATA%\FazaiHub\config.json`
+1. `DBHUB_CONFIG`
+2. `%PROGRAMDATA%\DBHub\config.json`
 3. `./config.json`
 
 Dev quick start:
@@ -36,9 +36,9 @@ npm run dev
 
 Default: LocalSystem. To run as a dedicated local user:
 
-1. Create local user, e.g. `FazaiSvc`.
-2. Grant read/write on `C:\ProgramData\FazaiHub` and all child folders.
-3. Open `services.msc`, FazaiHub > Log On > This account.
+1. Create local user, e.g. `DBHubSvc`.
+2. Grant read/write on `C:\ProgramData\DBHub` and all child folders.
+3. Open `services.msc`, DBHub > Log On > This account.
 4. Restart service.
 
 The account needs read/write on data, logs, and config. Firewall needs admin rights only at install time.
@@ -46,13 +46,13 @@ The account needs read/write on data, logs, and config. Firewall needs admin rig
 ## Firewall
 
 ```cmd
-netsh advfirewall firewall add rule name="Fazai Hub" dir=in action=allow protocol=TCP localport=8787
+netsh advfirewall firewall add rule name="DBHub" dir=in action=allow protocol=TCP localport=8787
 ```
 
 Remove with:
 
 ```cmd
-netsh advfirewall firewall delete rule name="Fazai Hub"
+netsh advfirewall firewall delete rule name="DBHub"
 ```
 
 ## Upgrade
@@ -74,9 +74,9 @@ Never copy `hub.sqlite` while the service is writing. WAL means the main file al
 ```powershell
 npm run service:stop
 # checkpoint WAL into the main database
-node -e "const D=require('better-sqlite3');const d=new D('C:\\ProgramData\\FazaiHub\\data\\hub.sqlite');d.pragma('wal_checkpoint(TRUNCATE)');d.close();"
-Copy-Item C:\ProgramData\FazaiHub\data\hub.sqlite C:\backup\ -Force
-Copy-Item C:\ProgramData\FazaiHub\config.json C:\backup\ -Force
+node -e "const D=require('better-sqlite3');const d=new D('C:\\ProgramData\\DBHub\\data\\hub.sqlite');d.pragma('wal_checkpoint(TRUNCATE)');d.close();"
+Copy-Item C:\ProgramData\DBHub\data\hub.sqlite C:\backup\ -Force
+Copy-Item C:\ProgramData\DBHub\config.json C:\backup\ -Force
 npm run service:start
 ```
 
@@ -96,7 +96,7 @@ If prebuilt binaries are unavailable, install Visual Studio Build Tools with "De
 
 ## Troubleshooting
 
-- `sc query FazaiHub` not RUNNING: `sc queryex FazaiHub`, check logs in `C:\ProgramData\FazaiHub\logs\hub-YYYY-MM-DD.log`.
+- `sc query DBHub` not RUNNING: `sc queryex DBHub`, check logs in `C:\ProgramData\DBHub\logs\hub-YYYY-MM-DD.log`.
 - Config error at startup: ensure `adminTokenHash` is 64 lowercase hex and data/log dirs writable.
 - Devices get 401: token wrong or device recreated (tokens shown once).
 - Bundles pending forever: parent not yet posted; after `pendingParentTimeoutMs` they quarantine as `missing_parent`.
@@ -105,7 +105,7 @@ If prebuilt binaries are unavailable, install Visual Studio Build Tools with "De
 ## Crash / restart test
 
 1. Start service, run `npm run simulate` against it.
-2. Mid-run: `Restart-Service FazaiHub`.
+2. Mid-run: `Restart-Service DBHub`.
 3. After simulator exits, check `/api/v1/status`: accepted count should match expected, no duplicates, chain verify OK, manifest latest matches.
 
 Service auto-restart uses node-windows (`maxRestarts:10`, `wait:2`, `grow:0.25`) plus `sc.exe failure` actions restart at 5s/10s/30s.

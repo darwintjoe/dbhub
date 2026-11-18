@@ -39,7 +39,7 @@ export function makeConfig(dataDir: string): Config {
 }
 
 export function makeCtx(): TestCtx {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fazai-hub-test-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dbhub-test-"));
   const config = makeConfig(dir);
   const db = openDatabase(config);
   return {
@@ -113,7 +113,7 @@ export function makeApp(ctx: TestCtx) {
     }
     next();
   });
-  app.get("/healthz", (_req, res) => res.json({ ok: true, version: "0.1.2" }));
+  app.get("/healthz", (_req, res) => res.json({ ok: true, version: "0.2.0" }));
   app.get("/", uiHandler(ctx.config, ctx.bundles, ctx.devices));
   app.get("/api/v1/status", requireDeviceOrAdmin(ctx.config, ctx.devices), statusHandler(ctx.config, ctx.bundles, ctx.devices));
   app.use("/api/v1/admin", requireAdmin(ctx.config));

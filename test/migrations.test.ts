@@ -8,7 +8,7 @@ import { latestMigrationVersion } from "../src/db/migrations";
 
 describe("migrations", () => {
   it("migrates empty DB to latest and reopen is no-op", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fazai-hub-mig-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dbhub-mig-"));
     try {
       const config = makeConfig(dir);
       const db1 = openDatabase(config);

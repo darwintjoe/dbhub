@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import Database from "better-sqlite3";
 
 const PORT = 18887;
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fazai-hub-sim-"));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dbhub-sim-"));
 const dataDir = path.join(tmp, "data");
 const configPath = path.join(tmp, "config.json");
 const adminToken = "sim-admin-token";
@@ -29,7 +29,7 @@ fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const child = spawn(process.execPath, ["dist/server.js"], {
   cwd: process.cwd(),
-  env: { ...process.env, FAZAI_HUB_CONFIG: configPath, NODE_ENV: "production" },
+  env: { ...process.env, DBHUB_CONFIG: configPath, NODE_ENV: "production" },
   stdio: ["ignore", "pipe", "pipe"],
 });
 child.stdout.on("data", (d) => process.stderr.write(d));

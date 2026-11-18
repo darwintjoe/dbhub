@@ -1,7 +1,7 @@
 {
-  "name": "fazai-hub",
-  "version": "0.1.2",
-  "description": "FAZAI local sync hub (Windows service)",
+  "name": "dbhub",
+  "version": "0.2.0",
+  "description": "DBHub local sync service (Windows service)",
   "private": true,
   "type": "commonjs",
   "main": "dist/server.js",
@@ -19,9 +19,9 @@
     "verify-chain": "node scripts/verify-chain.mjs",
     "service:install": "node src/bin/service-install.cjs",
     "service:uninstall": "node src/bin/service-uninstall.cjs",
-    "service:start": "sc start FazaiHub",
-    "service:stop": "sc stop FazaiHub",
-    "service:status": "sc query FazaiHub"
+    "service:start": "sc start DBHub",
+    "service:stop": "sc stop DBHub",
+    "service:status": "sc query DBHub"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.0",
