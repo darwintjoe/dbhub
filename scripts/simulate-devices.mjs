@@ -264,6 +264,10 @@ if (m.latestHubSeq !== lastSeq) {
   ok = false;
   failures.push(`manifest latest ${m.latestHubSeq} !== ${lastSeq}`);
 }
+if (m.latestAcceptedSeq !== 300) {
+  ok = false;
+  failures.push(`manifest latestAcceptedSeq ${m.latestAcceptedSeq} !== 300`);
+}
 
 const diagDb = new Database(path.join(dataDir, "hub.sqlite"), { readonly: true });
 console.log("diag statuses", diagDb.prepare("SELECT status, COUNT(*) AS c FROM bundles GROUP BY status").all());

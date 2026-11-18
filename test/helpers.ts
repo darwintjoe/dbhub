@@ -103,7 +103,7 @@ export function makeApp(ctx: TestCtx) {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: ctx.config.limits.maxBodyBytes }));
-  app.get("/healthz", (_req, res) => res.json({ ok: true, version: "0.1.0" }));
+  app.get("/healthz", (_req, res) => res.json({ ok: true, version: "0.1.1" }));
   app.get("/", uiHandler(ctx.config, ctx.bundles, ctx.devices));
   app.get("/api/v1/status", requireDeviceOrAdmin(ctx.config, ctx.devices), statusHandler(ctx.config, ctx.bundles, ctx.devices));
   app.use("/api/v1/admin", requireAdmin(ctx.config));

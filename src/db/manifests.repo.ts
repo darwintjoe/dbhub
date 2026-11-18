@@ -8,6 +8,7 @@ interface ManifestRow {
   latest_bundle_id: string | null;
   latest_bundle_hash: string | null;
   latest_hub_seq: number;
+  latest_accepted_seq: number | null;
   latest_chain_hash: string | null;
   latest_snapshot_id: string | null;
   latest_closed_period: string | null;
@@ -26,12 +27,12 @@ export class ManifestsRepo {
     this.upsertStmt = db.prepare(`
       INSERT INTO manifests (
         replica_id, company_id, replica_type, latest_bundle_id, latest_bundle_hash,
-        latest_hub_seq, latest_chain_hash, latest_snapshot_id, latest_closed_period,
-        schema_version, bundle_format_version, updated_at
+        latest_hub_seq, latest_accepted_seq, latest_chain_hash, latest_snapshot_id,
+        latest_closed_period, schema_version, bundle_format_version, updated_at
       ) VALUES (
         @replica_id, @company_id, @replica_type, @latest_bundle_id, @latest_bundle_hash,
-        @latest_hub_seq, @latest_chain_hash, @latest_snapshot_id, @latest_closed_period,
-        @schema_version, @bundle_format_version, @updated_at
+        @latest_hub_seq, @latest_accepted_seq, @latest_chain_hash, @latest_snapshot_id,
+        @latest_closed_period, @schema_version, @bundle_format_version, @updated_at
       )
       ON CONFLICT(replica_id) DO UPDATE SET
         company_id=excluded.company_id,
@@ -39,6 +40,7 @@ export class ManifestsRepo {
         latest_bundle_id=excluded.latest_bundle_id,
         latest_bundle_hash=excluded.latest_bundle_hash,
         latest_hub_seq=excluded.latest_hub_seq,
+        latest_accepted_seq=excluded.latest_accepted_seq,
         latest_chain_hash=excluded.latest_chain_hash,
         latest_snapshot_id=excluded.latest_snapshot_id,
         latest_closed_period=excluded.latest_closed_period,
@@ -57,6 +59,7 @@ export class ManifestsRepo {
       latest_bundle_id: m.latestBundleId,
       latest_bundle_hash: m.latestBundleHash,
       latest_hub_seq: m.latestHubSeq,
+      latest_accepted_seq: m.latestAcceptedSeq,
       latest_chain_hash: m.latestChainHash,
       latest_snapshot_id: m.latestSnapshotId,
       latest_closed_period: m.latestClosedPeriod,
@@ -78,6 +81,7 @@ export class ManifestsRepo {
       latestBundleId: r.latest_bundle_id,
       latestBundleHash: r.latest_bundle_hash,
       latestHubSeq: r.latest_hub_seq,
+      latestAcceptedSeq: r.latest_accepted_seq ?? 0,
       latestChainHash: r.latest_chain_hash,
       latestSnapshotId: r.latest_snapshot_id,
       latestClosedPeriod: r.latest_closed_period,

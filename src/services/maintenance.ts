@@ -7,6 +7,7 @@ import { chainHash } from "../domain/hashing";
 export interface ChainVerifyResult {
   ok: boolean;
   checked: number;
+  firstBadAcceptedSeq?: number;
   firstBadHubSeq?: number;
 }
 
@@ -42,18 +43,18 @@ export class MaintenanceService {
 
   verifyChain(): ChainVerifyResult {
     const rows = this.db
-      .prepare("SELECT hub_seq, bundle_hash, chain_prev_hash, chain_hash FROM bundles WHERE status='accepted' ORDER BY hub_seq ASC")
-      .all() as { hub_seq: number; bundle_hash: string; chain_prev_hash: string | null; chain_hash: string }[];
+      .prepare("SELECT hub_seq, accepted_seq, bundle_hash, chain_prev_hash, chain_hash FROM bundles WHERE status='accepted' ORDER BY accepted_seq ASC")
+      .all() as { hub_seq: number; accepted_seq: number; bundle_hash: string; chain_prev_hash: string | null; chain_hash: string }[];
     let prev: string | null = null;
     let checked = 0;
     for (const r of rows) {
       checked++;
       if (r.chain_prev_hash !== prev) {
-        return { ok: false, checked, firstBadHubSeq: r.hub_seq };
+        return { ok: false, checked, firstBadAcceptedSeq: r.accepted_seq, firstBadHubSeq: r.hub_seq };
       }
       const expected = chainHash(prev, r.bundle_hash);
       if (r.chain_hash !== expected) {
-        return { ok: false, checked, firstBadHubSeq: r.hub_seq };
+        return { ok: false, checked, firstBadAcceptedSeq: r.accepted_seq, firstBadHubSeq: r.hub_seq };
       }
       prev = r.chain_hash;
     }

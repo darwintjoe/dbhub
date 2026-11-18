@@ -1,6 +1,13 @@
 ﻿import type Database from "better-sqlite3";
+import { chainHash } from "../domain/hashing";
 
-const MIGRATIONS: { version: number; sql: string }[] = [
+interface Migration {
+  version: number;
+  sql?: string;
+  up?: (db: Database.Database) => void;
+}
+
+const MIGRATIONS: Migration[] = [
   {
     version: 1,
     sql: `
@@ -103,6 +110,40 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 `,
   },
+  {
+    version: 2,
+    // Additive only. v1 rows are backfilled once; old chain values are
+    // recomputed in accepted order so every later write is immutable.
+    sql: `
+ALTER TABLE bundles ADD COLUMN accepted_seq INTEGER;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bundles_accepted_seq ON bundles(accepted_seq) WHERE accepted_seq IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_bundles_device_status ON bundles(device_id, status, hub_seq);
+ALTER TABLE manifests ADD COLUMN latest_accepted_seq INTEGER;
+ALTER TABLE outbox ADD COLUMN lease_expires_at TEXT;
+CREATE TABLE IF NOT EXISTS pending_event_ids (
+  event_id TEXT PRIMARY KEY,
+  bundle_id TEXT NOT NULL,
+  device_id TEXT NOT NULL
+);
+`,
+    up: (db) => {
+      const rows = db
+        .prepare("SELECT hub_seq, bundle_hash FROM bundles WHERE status='accepted' ORDER BY hub_seq ASC")
+        .all() as { hub_seq: number; bundle_hash: string }[];
+      const update = db.prepare(
+        "UPDATE bundles SET accepted_seq=?, chain_prev_hash=?, chain_hash=? WHERE hub_seq=?",
+      );
+      let prev: string | null = null;
+      let seq = 0;
+      for (const row of rows) {
+        seq++;
+        const h = chainHash(prev, row.bundle_hash);
+        update.run(seq, prev, h, row.hub_seq);
+        prev = h;
+      }
+      db.prepare("UPDATE manifests SET latest_accepted_seq=?").run(seq);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
@@ -110,7 +151,8 @@ export function runMigrations(db: Database.Database): void {
   for (const m of MIGRATIONS) {
     if (m.version <= current) continue;
     const tx = db.transaction(() => {
-      db.exec(m.sql);
+      if (m.sql) db.exec(m.sql);
+      if (m.up) m.up(db);
       db.pragma(`user_version = ${m.version}`);
     });
     tx();

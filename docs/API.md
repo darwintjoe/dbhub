@@ -17,7 +17,7 @@ Auth:
 
 ```bash
 curl http://localhost:8787/healthz
-# { "ok": true, "version": "0.1.0" }
+# { "ok": true, "version": "0.1.1" }
 ```
 
 ## Admin: create device
@@ -75,7 +75,7 @@ curl "http://localhost:8787/api/v1/pull?since=0&limit=200" \
   -H "Authorization: Bearer $DEVICE_TOKEN"
 ```
 
-Returns only `accepted` bundles ordered by `hub_seq` ASC, max `limit=200`, with `nextSince`.
+`since` is an **accepted sequence cursor**, not `hubSeq`. Returns only `accepted` bundles ordered by `accepted_seq` ASC, max `limit=200`. Each item includes both `acceptedSeq` (chain/order position) and `hubSeq` (insertion/audit order). `nextSince` is the last `acceptedSeq` returned.
 
 ## Manifest
 
@@ -130,6 +130,8 @@ curl http://localhost:8787/api/v1/admin/outbox \
 curl http://localhost:8787/api/v1/status \
   -H "Authorization: Bearer $DEVICE_TOKEN"
 ```
+
+`chain.latestAcceptedSeq` is the chain head. `chain.latestHubSeq` remains the maximum insertion-order `hubSeq` and may be larger after out-of-order resolution.
 
 ## Dashboard
 

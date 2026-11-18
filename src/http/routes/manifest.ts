@@ -20,6 +20,7 @@ export function manifestRoutes(config: Config, manifests: ManifestsRepo) {
         latestBundleHash: null,
         latestHubSeq: 0,
         latestChainHash: null,
+        latestAcceptedSeq: 0,
         latestSnapshotId: null,
         latestClosedPeriod: null,
         schemaVersion: 1,

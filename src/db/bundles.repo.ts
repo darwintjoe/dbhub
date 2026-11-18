@@ -3,6 +3,7 @@ import type { StoredBundle } from "../domain/types";
 
 interface BundleRow {
   hub_seq: number;
+  accepted_seq: number | null;
   bundle_id: string;
   company_id: string;
   device_id: string;
@@ -30,6 +31,7 @@ interface BundleRow {
 function mapRow(r: BundleRow): StoredBundle {
   return {
     hubSeq: r.hub_seq,
+    acceptedSeq: r.accepted_seq,
     bundleId: r.bundle_id,
     companyId: r.company_id,
     deviceId: r.device_id,
@@ -61,17 +63,14 @@ export class BundlesRepo {
   private readonly insertStmt: Database.Statement;
   private readonly byIdStmt: Database.Statement;
   private readonly byHashStmt: Database.Statement;
-  private readonly existsHashStmt: Database.Statement;
-  private readonly existsAcceptedHashStmt: Database.Statement;
   private readonly existsSettledHashStmt: Database.Statement;
-  private readonly lastAcceptedDeviceStmt: Database.Statement;
-  private readonly lastAcceptedHeadStmt: Database.Statement;
-  private readonly lastAcceptedBeforeStmt: Database.Statement;
+  private readonly acceptedHeadStmt: Database.Statement;
   private readonly pendingForDeviceStmt: Database.Statement;
   private readonly acceptedSinceStmt: Database.Statement;
   private readonly recentStmt: Database.Statement;
   private readonly quarantineListStmt: Database.Statement;
   private readonly quarantineDetailStmt: Database.Statement;
+  private readonly nextAcceptedSeqStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.db = db;
@@ -80,43 +79,38 @@ export class BundlesRepo {
         bundle_id, company_id, device_id, user_id, period, client_prev_hash,
         payload_hash, bundle_hash, chain_prev_hash, chain_hash, event_count,
         schema_version, bundle_format_version, created_at, received_at,
-        payload_json, status, quarantine_reason, pending_since, replica_target
+        payload_json, status, quarantine_reason, pending_since, replica_target, accepted_seq
       ) VALUES (
         @bundle_id, @company_id, @device_id, @user_id, @period, @client_prev_hash,
         @payload_hash, @bundle_hash, @chain_prev_hash, @chain_hash, @event_count,
         @schema_version, @bundle_format_version, @created_at, @received_at,
-        @payload_json, @status, @quarantine_reason, @pending_since, @replica_target
+        @payload_json, @status, @quarantine_reason, @pending_since, @replica_target, @accepted_seq
       )
     `);
     this.byIdStmt = db.prepare("SELECT * FROM bundles WHERE bundle_id = ?");
     this.byHashStmt = db.prepare("SELECT * FROM bundles WHERE bundle_hash = ?");
-    this.existsHashStmt = db.prepare("SELECT 1 FROM bundles WHERE bundle_hash = ? LIMIT 1");
-    this.existsAcceptedHashStmt = db.prepare(
-      "SELECT 1 FROM bundles WHERE bundle_hash = ? AND device_id = ? AND status = 'accepted' LIMIT 1",
-    );
     this.existsSettledHashStmt = db.prepare(
       "SELECT 1 FROM bundles WHERE bundle_hash = ? AND status != 'pending_parent' LIMIT 1",
     );
-    this.lastAcceptedDeviceStmt = db.prepare(
-      "SELECT * FROM bundles WHERE device_id = ? AND status = 'accepted' ORDER BY hub_seq DESC LIMIT 1",
-    );
-    this.lastAcceptedHeadStmt = db.prepare(
-      "SELECT * FROM bundles WHERE status = 'accepted' ORDER BY hub_seq DESC LIMIT 1",
-    );
-    this.lastAcceptedBeforeStmt = db.prepare(
-      "SELECT * FROM bundles WHERE status = 'accepted' AND hub_seq < ? ORDER BY hub_seq DESC LIMIT 1",
+    this.acceptedHeadStmt = db.prepare(
+      "SELECT * FROM bundles WHERE status='accepted' ORDER BY accepted_seq DESC LIMIT 1",
     );
     this.pendingForDeviceStmt = db.prepare(
       "SELECT * FROM bundles WHERE device_id = ? AND status = 'pending_parent' ORDER BY hub_seq ASC",
     );
     this.acceptedSinceStmt = db.prepare(
-      "SELECT * FROM bundles WHERE status = 'accepted' AND hub_seq > ? ORDER BY hub_seq ASC LIMIT ?",
+      "SELECT * FROM bundles WHERE status = 'accepted' AND accepted_seq > ? ORDER BY accepted_seq ASC LIMIT ?",
     );
     this.recentStmt = db.prepare("SELECT * FROM bundles ORDER BY hub_seq DESC LIMIT ?");
     this.quarantineListStmt = db.prepare(
       "SELECT bundle_id, device_id, quarantine_reason, received_at, hub_seq, status FROM bundles WHERE status = ? ORDER BY hub_seq DESC LIMIT ?",
     );
     this.quarantineDetailStmt = db.prepare("SELECT * FROM bundles WHERE bundle_id = ?");
+    // Only accepted rows carry a non-null accepted_seq (partial unique index),
+    // so MAX(accepted_seq) is an O(1) index lookup without a status filter.
+    this.nextAcceptedSeqStmt = db.prepare(
+      "SELECT COALESCE(MAX(accepted_seq),0)+1 AS next FROM bundles",
+    );
   }
 
   insert(input: Record<string, unknown>): number {
@@ -134,31 +128,26 @@ export class BundlesRepo {
     return r ? mapRow(r) : null;
   }
 
-  existsBundleHash(hash: string): boolean {
-    return Boolean(this.existsHashStmt.get(hash));
-  }
-
-  existsAcceptedBundleHash(hash: string, deviceId: string): boolean {
-    return Boolean(this.existsAcceptedHashStmt.get(hash, deviceId));
-  }
-
   existsSettledBundleHash(hash: string): boolean {
     return Boolean(this.existsSettledHashStmt.get(hash));
   }
 
-  lastAcceptedForDevice(deviceId: string): StoredBundle | null {
-    const r = this.lastAcceptedDeviceStmt.get(deviceId) as BundleRow | undefined;
+  acceptedHead(): StoredBundle | null {
+    const r = this.acceptedHeadStmt.get() as BundleRow | undefined;
     return r ? mapRow(r) : null;
   }
 
+  // Insertion-order head (max hub_seq), distinct from the chain head.
   lastAcceptedHead(): StoredBundle | null {
-    const r = this.lastAcceptedHeadStmt.get() as BundleRow | undefined;
+    const r = this.db
+      .prepare("SELECT * FROM bundles WHERE status='accepted' ORDER BY hub_seq DESC LIMIT 1")
+      .get() as BundleRow | undefined;
     return r ? mapRow(r) : null;
   }
 
-  lastAcceptedBefore(hubSeq: number): StoredBundle | null {
-    const r = this.lastAcceptedBeforeStmt.get(hubSeq) as BundleRow | undefined;
-    return r ? mapRow(r) : null;
+  nextAcceptedSeq(): number {
+    const r = this.nextAcceptedSeqStmt.get() as { next: number };
+    return r.next;
   }
 
   pendingForDevice(deviceId: string): StoredBundle[] {
@@ -196,15 +185,15 @@ export class BundlesRepo {
     return r ? mapRow(r) : null;
   }
 
-  markAccepted(hubSeq: number, chainPrevHash: string | null, chainHash: string, now: string): void {
+  markAccepted(hubSeq: number, acceptedSeq: number, chainPrevHash: string | null, chainHash: string): void {
     this.db
       .prepare(
-        "UPDATE bundles SET status='accepted', chain_prev_hash=?, chain_hash=?, pending_since=NULL WHERE hub_seq=?",
+        "UPDATE bundles SET status='accepted', accepted_seq=?, chain_prev_hash=?, chain_hash=?, pending_since=NULL WHERE hub_seq=?",
       )
-      .run(chainPrevHash, chainHash, hubSeq);
+      .run(acceptedSeq, chainPrevHash, chainHash, hubSeq);
   }
 
-  markQuarantinedPendingTimeout(hubSeq: number, now: string): void {
+  markQuarantinedPendingTimeout(hubSeq: number, _now: string): void {
     this.db
       .prepare(
         "UPDATE bundles SET status='quarantined', quarantine_reason='missing_parent', pending_since=NULL WHERE hub_seq=?",
@@ -218,11 +207,6 @@ export class BundlesRepo {
 
   countByStatus(status: string): number {
     const r = this.db.prepare("SELECT COUNT(*) AS c FROM bundles WHERE status=?").get(status) as { c: number };
-    return r.c;
-  }
-
-  countAll(): number {
-    const r = this.db.prepare("SELECT COUNT(*) AS c FROM bundles").get() as { c: number };
     return r.c;
   }
 
@@ -241,8 +225,6 @@ export class BundlesRepo {
     return r.m;
   }
 
-  // Device chain head is tracked in meta, not by hub_seq: pending bundles can
-  // be accepted later with a lower hub_seq than their parent.
   getDeviceHead(deviceId: string): string | null {
     const r = this.db.prepare("SELECT value FROM meta WHERE key=?").get(`device_head:${deviceId}`) as
       | { value: string }

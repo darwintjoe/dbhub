@@ -5,9 +5,10 @@ import type { DevicesRepo } from "../../db/devices.repo";
 
 export function statusHandler(config: Config, bundles: BundlesRepo, devices: DevicesRepo) {
   return (_req: Request, res: Response) => {
-    const latest = bundles.lastAcceptedHead();
+    const latest = bundles.acceptedHead();
+    const insertionHead = bundles.lastAcceptedHead();
     res.json({
-      version: "0.1.0",
+      version: "0.1.1",
       companyId: config.companyId,
       uptimeSec: Math.floor(process.uptime()),
       counts: {
@@ -18,7 +19,8 @@ export function statusHandler(config: Config, bundles: BundlesRepo, devices: Dev
         events: bundles.countEvents(),
       },
       chain: {
-        latestHubSeq: latest ? latest.hubSeq : 0,
+        latestAcceptedSeq: latest ? (latest.acceptedSeq ?? 0) : 0,
+        latestHubSeq: insertionHead ? insertionHead.hubSeq : 0,
         latestChainHash: latest ? latest.chainHash : null,
       },
       lastBundleAt: bundles.lastReceivedAt(),

@@ -17,6 +17,7 @@ export function pullRoutes(bundles: BundlesRepo) {
     const { since, limit } = parsed.data;
     const rows = bundles.acceptedSince(since, limit);
     const bundlesOut = rows.map((b) => ({
+      acceptedSeq: b.acceptedSeq,
       hubSeq: b.hubSeq,
       bundleId: b.bundleId,
       bundleHash: b.bundleHash,
@@ -26,7 +27,7 @@ export function pullRoutes(bundles: BundlesRepo) {
       payload: b.payload,
     }));
     const lastRow = rows[rows.length - 1];
-    const nextSince = lastRow ? lastRow.hubSeq : since;
+    const nextSince = lastRow ? (lastRow.acceptedSeq ?? since) : since;
     res.json({ bundles: bundlesOut, nextSince });
   });
   return router;

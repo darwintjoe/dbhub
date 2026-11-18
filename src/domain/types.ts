@@ -1,4 +1,4 @@
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";
 export const SUPPORTED_SCHEMA_VERSION = 1;
 export const SUPPORTED_BUNDLE_FORMAT_VERSION = 1;
 
@@ -38,6 +38,7 @@ export interface Manifest {
   latestBundleHash: string | null;
   latestHubSeq: number;
   latestChainHash: string | null;
+  latestAcceptedSeq: number;
   latestSnapshotId: string | null;
   latestClosedPeriod: string | null;
   schemaVersion: number;
@@ -58,6 +59,7 @@ export interface DeviceRow {
 
 export interface StoredBundle {
   hubSeq: number;
+  acceptedSeq: number | null;
   bundleId: string;
   companyId: string;
   deviceId: string;

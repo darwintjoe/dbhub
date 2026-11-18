@@ -85,6 +85,7 @@ export class IngestService {
           quarantine_reason: "hash_mismatch",
           pending_since: null,
           replica_target: this.config.storage.target,
+          accepted_seq: null,
         });
         this.audit.log(now, device.id, "bundle.quarantined", { reason: "hash_mismatch", hubSeq });
         return { status: "quarantined" as const, reason: "hash_mismatch" };
@@ -121,6 +122,7 @@ export class IngestService {
           quarantine_reason: "duplicate_event",
           pending_since: null,
           replica_target: this.config.storage.target,
+          accepted_seq: null,
         });
         this.audit.log(now, device.id, "bundle.quarantined", { reason: "duplicate_event", hubSeq });
         return { status: "quarantined" as const, reason: "duplicate_event" };
@@ -155,6 +157,7 @@ export class IngestService {
           quarantine_reason: "device_chain_break",
           pending_since: null,
           replica_target: this.config.storage.target,
+          accepted_seq: null,
         });
         this.audit.log(now, device.id, "bundle.quarantined", { reason: "device_chain_break", hubSeq });
         return { status: "quarantined" as const, reason: "device_chain_break" };
@@ -182,6 +185,7 @@ export class IngestService {
           quarantine_reason: null,
           pending_since: now,
           replica_target: this.config.storage.target,
+          accepted_seq: null,
         });
         for (const e of bundle.payload) {
           this.db.prepare("INSERT INTO events (event_id, bundle_id, type, occurred_at, device_id) VALUES (?,?,?,?,?)").run(
@@ -197,10 +201,10 @@ export class IngestService {
         return { status: "pending_parent" as const };
       }
 
-      // Accepted
-      const head = this.bundles.lastAcceptedHead();
-      const chainPrev = head ? head.chainHash : null;
+      // Accepted: accepted_seq and chain values are assigned once, here.
+      const chainPrev = this.bundles.acceptedHead()?.chainHash ?? null;
       const chainH = chainHash(chainPrev, bundle.bundleHash);
+      const acceptedSeq = this.bundles.nextAcceptedSeq();
 
       const hubSeq = this.bundles.insert({
         bundle_id: bundle.bundleId,
@@ -223,6 +227,7 @@ export class IngestService {
         quarantine_reason: null,
         pending_since: null,
         replica_target: this.config.storage.target,
+        accepted_seq: acceptedSeq,
       });
 
       for (const e of bundle.payload) {
@@ -238,30 +243,7 @@ export class IngestService {
       this.bundles.updateDeviceLastSeen(device.id, now);
       this.bundles.setDeviceHead(device.id, bundle.bundleHash);
       this.outbox.enqueue(bundle.bundleId, this.config.storage.target, now);
-
-      // Update manifest
-      const latest = this.bundles.lastAcceptedHead();
-      if (latest) {
-        const manifest: Manifest = {
-          manifestId: this.config.replicaId,
-          companyId: this.config.companyId,
-          ledgerStreamId: "main",
-          replicaId: this.config.replicaId,
-          replicaType: "hub",
-          latestBundleId: latest.bundleId,
-          latestBundleHash: latest.bundleHash,
-          latestHubSeq: latest.hubSeq,
-          latestChainHash: latest.chainHash,
-          latestSnapshotId: null,
-          latestClosedPeriod: null,
-          schemaVersion: bundle.schemaVersion,
-          bundleFormatVersion: bundle.bundleFormatVersion,
-          updatedAt: now,
-        };
-        this.manifests.upsert(manifest);
-      }
-
-      this.audit.log(now, device.id, "bundle.accepted", { hubSeq, chainHash: chainH });
+      this.audit.log(now, device.id, "bundle.accepted", { hubSeq, acceptedSeq, chainHash: chainH });
 
       // Resolve pending children for this device.
       this.resolvePending(device.id, now);
@@ -281,32 +263,37 @@ export class IngestService {
   }
 
   private resolvePending(deviceId: string, now: string): void {
-    let changed = true;
-    while (changed) {
-      changed = false;
-      const pending = this.bundles.pendingForDevice(deviceId);
-      for (const p of pending) {
-        const parentExists =
-          p.clientPrevHash === null || this.bundles.existsAcceptedBundleHash(p.clientPrevHash, deviceId);
-        if (!parentExists) continue;
-        const prev = this.bundles.lastAcceptedBefore(p.hubSeq);
-        const chainPrev = prev ? prev.chainHash : null;
-        const chainH = chainHash(chainPrev, p.bundleHash);
-        this.bundles.markAccepted(p.hubSeq, chainPrev, chainH, now);
-        // Advance device head only when this bundle directly follows it.
-        if (this.bundles.getDeviceHead(deviceId) === p.clientPrevHash) {
-          this.bundles.setDeviceHead(deviceId, p.bundleHash);
-        }
-        this.outbox.enqueue(p.bundleId, this.config.storage.target, now);
-        this.audit.log(now, deviceId, "bundle.resolved", { hubSeq: p.hubSeq });
-        changed = true;
-      }
+    // Strict resolution: only the pending bundle directly following the
+    // current device head may be accepted. A parent merely existing somewhere
+    // is not enough; that would silently accept forks.
+    for (;;) {
+      const head = this.bundles.getDeviceHead(deviceId);
+      const next = this.bundles.pendingForDevice(deviceId).find((p) => p.clientPrevHash === head);
+      if (!next) break;
+      const chainPrev = this.bundles.acceptedHead()?.chainHash ?? null;
+      const chainH = chainHash(chainPrev, next.bundleHash);
+      const acceptedSeq = this.bundles.nextAcceptedSeq();
+      this.bundles.markAccepted(next.hubSeq, acceptedSeq, chainPrev, chainH);
+      this.bundles.setDeviceHead(deviceId, next.bundleHash);
+      this.outbox.enqueue(next.bundleId, this.config.storage.target, now);
+      this.audit.log(now, deviceId, "bundle.resolved", { hubSeq: next.hubSeq, acceptedSeq });
     }
-    // Resolving a pending bundle can insert an accepted bundle with a lower
-    // hub_seq than already-accepted rows. Rebuild the whole local chain so
-    // chain_prev_hash always matches the previous accepted row by hub_seq.
-    this.rebuildHubChain();
-    const latest = this.bundles.lastAcceptedHead();
+
+    const head = this.bundles.getDeviceHead(deviceId);
+    for (const p of this.bundles.pendingForDevice(deviceId)) {
+      const isFork =
+        (p.clientPrevHash === null && head !== null) ||
+        (p.clientPrevHash !== null &&
+          p.clientPrevHash !== head &&
+          this.bundles.existsSettledBundleHash(p.clientPrevHash));
+      if (!isFork) continue;
+      this.db
+        .prepare("UPDATE bundles SET status='quarantined', quarantine_reason='device_chain_break', pending_since=NULL WHERE hub_seq=?")
+        .run(p.hubSeq);
+      this.audit.log(now, deviceId, "bundle.fork_rejected", { hubSeq: p.hubSeq });
+    }
+
+    const latest = this.bundles.acceptedHead();
     if (latest) {
       const manifest: Manifest = {
         manifestId: this.config.replicaId,
@@ -317,6 +304,7 @@ export class IngestService {
         latestBundleId: latest.bundleId,
         latestBundleHash: latest.bundleHash,
         latestHubSeq: latest.hubSeq,
+        latestAcceptedSeq: latest.acceptedSeq ?? 0,
         latestChainHash: latest.chainHash,
         latestSnapshotId: null,
         latestClosedPeriod: null,
@@ -325,19 +313,6 @@ export class IngestService {
         updatedAt: now,
       };
       this.manifests.upsert(manifest);
-    }
-  }
-
-  private rebuildHubChain(): void {
-    const rows = this.db
-      .prepare("SELECT hub_seq, bundle_hash FROM bundles WHERE status='accepted' ORDER BY hub_seq ASC")
-      .all() as { hub_seq: number; bundle_hash: string }[];
-    let prev: string | null = null;
-    const update = this.db.prepare("UPDATE bundles SET chain_prev_hash=?, chain_hash=? WHERE hub_seq=?");
-    for (const row of rows) {
-      const h = chainHash(prev, row.bundle_hash);
-      update.run(prev, h, row.hub_seq);
-      prev = h;
     }
   }
 }

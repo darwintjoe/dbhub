@@ -19,7 +19,7 @@ describe("per-device chain and hub chain", () => {
       const b2 = makeBundle(d.id, b1.bundleHash, 2);
       expect(svc.ingest(b1, d)).toMatchObject({ status: "accepted" });
       expect(svc.ingest(b2, d)).toMatchObject({ status: "accepted" });
-      expect(ctx.bundles.lastAcceptedForDevice(d.id)?.bundleHash).toBe(b2.bundleHash);
+      expect(ctx.bundles.getDeviceHead(d.id)).toBe(b2.bundleHash);
     } finally {
       ctx.cleanup();
     }

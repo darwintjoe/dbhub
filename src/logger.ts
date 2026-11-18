@@ -54,7 +54,7 @@ export function createLogger(config: Config) {
   const logger = pino(
     {
       level: process.env.LOG_LEVEL || "info",
-      base: { service: "fazai-hub", version: "0.1.0" },
+      base: { service: "fazai-hub", version: "0.1.1" },
       redact: {
         paths: ["req.headers.authorization", "*.token", "*.payload", "payload", "token"],
         censor: "[redacted]",
