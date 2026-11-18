@@ -114,7 +114,7 @@ Service auto-restart uses node-windows (`maxRestarts:10`, `wait:2`, `grow:0.25`)
 
 ## Acceptance record (2026-11-18)
 
-- Version: 0.2.0
+- Version: 0.2.0 (commit 02daeb0)
 - Node.js: 22.23.5 (portable user-level install; production target met for verification)
 - npm: 10.9.9
 - Rename check: zero case-insensitive `fazai` matches in tracked/untracked project files (excluding node_modules, dist, .git)
