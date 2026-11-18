@@ -201,15 +201,11 @@ export class IngestService {
           replica_target: this.config.storage.target,
           accepted_seq: null,
         });
-        for (const e of bundle.payload) {
-          this.db.prepare("INSERT INTO events (event_id, bundle_id, type, occurred_at, device_id) VALUES (?,?,?,?,?)").run(
-            e.id,
-            bundle.bundleId,
-            e.type,
-            e.occurredAt ?? null,
-            device.id,
-          );
-        }
+        this.bundles.reserveEventIds(
+          bundle.bundleId,
+          device.id,
+          bundle.payload.map((e) => e.id),
+        );
         this.bundles.updateDeviceLastSeen(device.id, now);
         this.audit.log(now, device.id, "bundle.pending_parent", { hubSeq });
         return { status: "pending_parent" as const };
@@ -244,15 +240,7 @@ export class IngestService {
         accepted_seq: acceptedSeq,
       });
 
-      for (const e of bundle.payload) {
-        this.db.prepare("INSERT INTO events (event_id, bundle_id, type, occurred_at, device_id) VALUES (?,?,?,?,?)").run(
-          e.id,
-          bundle.bundleId,
-          e.type,
-          e.occurredAt ?? null,
-          device.id,
-        );
-      }
+      this.insertEvents(bundle.bundleId, device.id, bundle.payload);
 
       this.bundles.updateDeviceLastSeen(device.id, now);
       this.bundles.setDeviceHead(device.id, bundle.bundleHash);
@@ -272,8 +260,16 @@ export class IngestService {
   }
 
   private eventExists(eventId: string): boolean {
-    const r = this.db.prepare("SELECT 1 FROM events WHERE event_id = ? LIMIT 1").get(eventId);
-    return Boolean(r);
+    return this.bundles.eventExistsInEvents(eventId) || this.bundles.eventIdReserved(eventId);
+  }
+
+  private insertEvents(bundleId: string, deviceId: string, payload: { id: string; type: string; occurredAt?: string }[]): void {
+    const stmt = this.db.prepare(
+      "INSERT INTO events (event_id, bundle_id, type, occurred_at, device_id) VALUES (?,?,?,?,?)",
+    );
+    for (const e of payload) {
+      stmt.run(e.id, bundleId, e.type, e.occurredAt ?? null, deviceId);
+    }
   }
 
   private resolvePending(deviceId: string, now: string): void {
@@ -284,10 +280,22 @@ export class IngestService {
       const head = this.bundles.getDeviceHead(deviceId);
       const next = this.bundles.pendingForDevice(deviceId).find((p) => p.clientPrevHash === head);
       if (!next) break;
+
+      // An event id may have been won by an accepted bundle while this one
+      // waited. Quarantine instead of throwing a UNIQUE violation.
+      const collision = next.payload.some((e) => this.bundles.eventExistsInEvents(e.id));
+      if (collision) {
+        this.bundles.markQuarantinedPending(next.hubSeq, "duplicate_event");
+        this.audit.log(now, deviceId, "bundle.event_race_rejected", { hubSeq: next.hubSeq });
+        continue;
+      }
+
       const chainPrev = this.bundles.acceptedHead()?.chainHash ?? null;
       const chainH = chainHash(chainPrev, next.bundleHash);
       const acceptedSeq = this.bundles.nextAcceptedSeq();
       this.bundles.markAccepted(next.hubSeq, acceptedSeq, chainPrev, chainH);
+      this.bundles.deleteEventReservations(next.bundleId);
+      this.insertEvents(next.bundleId, deviceId, next.payload);
       this.bundles.setDeviceHead(deviceId, next.bundleHash);
       this.outbox.enqueue(next.bundleId, this.config.storage.target, now);
       this.audit.log(now, deviceId, "bundle.resolved", { hubSeq: next.hubSeq, acceptedSeq });
@@ -301,9 +309,7 @@ export class IngestService {
           p.clientPrevHash !== head &&
           this.bundles.existsSettledBundleHash(p.clientPrevHash));
       if (!isFork) continue;
-      this.db
-        .prepare("UPDATE bundles SET status='quarantined', quarantine_reason='device_chain_break', pending_since=NULL WHERE hub_seq=?")
-        .run(p.hubSeq);
+      this.bundles.markQuarantinedPending(p.hubSeq, "device_chain_break");
       this.audit.log(now, deviceId, "bundle.fork_rejected", { hubSeq: p.hubSeq });
     }
 

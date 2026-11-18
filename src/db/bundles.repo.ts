@@ -194,11 +194,44 @@ export class BundlesRepo {
   }
 
   markQuarantinedPendingTimeout(hubSeq: number, _now: string): void {
+    const row = this.db.prepare("SELECT bundle_id FROM bundles WHERE hub_seq=?").get(hubSeq) as
+      | { bundle_id: string }
+      | undefined;
     this.db
       .prepare(
         "UPDATE bundles SET status='quarantined', quarantine_reason='missing_parent', pending_since=NULL WHERE hub_seq=?",
       )
       .run(hubSeq);
+    if (row) this.deleteEventReservations(row.bundle_id);
+  }
+
+  markQuarantinedPending(hubSeq: number, reason: string): void {
+    const row = this.db.prepare("SELECT bundle_id FROM bundles WHERE hub_seq=?").get(hubSeq) as
+      | { bundle_id: string }
+      | undefined;
+    this.db
+      .prepare("UPDATE bundles SET status='quarantined', quarantine_reason=?, pending_since=NULL WHERE hub_seq=?")
+      .run(reason, hubSeq);
+    if (row) this.deleteEventReservations(row.bundle_id);
+  }
+
+  reserveEventIds(bundleId: string, deviceId: string, eventIds: string[]): void {
+    const stmt = this.db.prepare(
+      "INSERT INTO pending_event_ids (event_id, bundle_id, device_id) VALUES (?,?,?)",
+    );
+    for (const id of eventIds) stmt.run(id, bundleId, deviceId);
+  }
+
+  deleteEventReservations(bundleId: string): void {
+    this.db.prepare("DELETE FROM pending_event_ids WHERE bundle_id=?").run(bundleId);
+  }
+
+  eventExistsInEvents(eventId: string): boolean {
+    return Boolean(this.db.prepare("SELECT 1 FROM events WHERE event_id=? LIMIT 1").get(eventId));
+  }
+
+  eventIdReserved(eventId: string): boolean {
+    return Boolean(this.db.prepare("SELECT 1 FROM pending_event_ids WHERE event_id=? LIMIT 1").get(eventId));
   }
 
   updateDeviceLastSeen(deviceId: string, now: string): void {
