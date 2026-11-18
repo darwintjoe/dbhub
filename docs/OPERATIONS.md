@@ -110,6 +110,26 @@ If prebuilt binaries are unavailable, install Visual Studio Build Tools with "De
 
 Service auto-restart uses node-windows (`maxRestarts:10`, `wait:2`, `grow:0.25`) plus `sc.exe failure` actions restart at 5s/10s/30s.
 
+## Acceptance record (2026-11-18)
+
+- Version: 0.2.0 (commit eb95164)
+- Node.js: 22.23.5 (portable user-level install; production target met for verification)
+- npm: 10.9.9
+- Rename check: zero case-insensitive `fazai` matches in tracked/untracked project files (excluding node_modules, dist, .git)
+- Tests: 61/61 passed
+- Typecheck: `npx tsc -p tsconfig.json --noEmit` passed
+- Build: `npm run build` passed
+- Simulator: `npm run simulate` -> `SIMULATION PASSED` (accepted 300, quarantined 1, pulled/checked 300)
+- Service DBHub: NOT installed in this environment (no administrator elevation available); application process verified manually via `node dist/server.js` with `DBHUB_CONFIG=C:\ProgramData\DBHub\config.json`
+- Config/data/logs: `C:\ProgramData\DBHub\{config.json,data,logs,replica}` (folder replica target used)
+- Auto-start after reboot: not executed (service not installed)
+- Crash auto-restart: not executed (service not installed)
+- Graceful restart/WAL checkpoint: manual process stop/start passed; `wal_checkpoint(TRUNCATE)` returned busy=0
+- LAN client push/pull: local smoke passed (device created, one accepted bundle, pull ordered by acceptedSeq, chain verify checked 1); second-LAN-PC leg not executed
+- Backup/restore drill: passed (checkpoint, copy, restore, status counts and chain verify matched; original DB retained as `hub.sqlite.pre-restore` until drill passed)
+- Deviations: Node installed per-user instead of system-wide; Windows service, reboot, and crash-restart acceptance steps could not be executed without elevation. Run `scripts/install.ps1` from an elevated PowerShell to complete those steps.
+- Deferred issues remain: pull response omits full bundle fields; zod advisory; rate limiter scans all buckets; duplicated version string; BUNDLE-006 overloaded; folder replica filenames sort by hubSeq; v3 defensive branches lack dedicated tests.
+
 ## v0 limitations / gaps
 
 - Dashboard at `/` has **no authentication**. Do not expose to untrusted networks. It never displays payloads or tokens.
