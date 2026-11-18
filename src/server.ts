@@ -107,30 +107,32 @@ function main() {
     logger.info({ host: config.host, port: config.port }, "listening");
   });
 
+  batching.resetOnStartup();
   batching.start();
   maintenance.start();
 
   let shuttingDown = false;
-  const shutdown = (signal: string) => {
+  const shutdown = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info({ signal }, "shutting down");
-    server.close(() => {
-      try {
-        batching.stop();
-        maintenance.stop();
-        maintenance.checkpoint();
-        db.close();
-      } catch (e) {
-        logger.error({ err: e }, "shutdown error");
-      }
-      process.exit(0);
-    });
-    setTimeout(() => process.exit(1), 10000).unref();
+    const force = setTimeout(() => process.exit(1), 10_000);
+    force.unref();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    try {
+      await batching.stop();
+      maintenance.stop();
+      maintenance.checkpoint();
+      db.close();
+    } catch (e) {
+      logger.error({ err: e }, "shutdown error");
+    }
+    clearTimeout(force);
+    process.exit(0);
   };
 
-  process.on("SIGINT", () => shutdown("SIGINT"));
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
   process.on("uncaughtException", (e) => {
     logger.fatal({ err: e }, "uncaughtException");
     process.exit(1);
