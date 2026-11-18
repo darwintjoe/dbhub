@@ -65,13 +65,13 @@ export function makeCtx(): TestCtx {
   };
 }
 
-export function addDevice(ctx: TestCtx, id = "dev_1"): DeviceRow {
+export function addDevice(ctx: TestCtx, id = "dev_1", token = "dev-token"): DeviceRow {
   const device: DeviceRow = {
     id,
     companyId: ctx.config.companyId,
     prefix: id,
     label: "Test",
-    tokenHash: sha256Hex("dev-token"),
+    tokenHash: sha256Hex(token),
     status: "approved",
     createdAt: "2026-11-01T00:00:00.000Z",
     lastSeenAt: null,

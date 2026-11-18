@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
-import { addDevice, makeApp, makeCtx } from "./helpers";
+import { addDevice, makeApp, makeBundle, makeCtx } from "./helpers";
 import { sha256Hex } from "../src/domain/hashing";
 
 const admin = { Authorization: "Bearer admin-token" };
@@ -31,6 +31,26 @@ describe("auth matrix", () => {
       const r = await request(app).get("/api/v1/status").set("Authorization", "Bearer dev-token");
       expect(r.status).toBe(403);
       expect(r.body.error.code).toBe("AUTH-002");
+    } finally {
+      ctx.cleanup();
+    }
+  });
+
+  it("rejects a bundle whose deviceId differs from the authenticated device", async () => {
+    const ctx = makeCtx();
+    try {
+      addDevice(ctx, "dev_a", "token-a");
+      addDevice(ctx, "dev_b", "token-b");
+      const { app } = makeApp(ctx);
+      const b = makeBundle("dev_b", null, 1);
+      const r = await request(app)
+        .post("/api/v1/relay/bundles")
+        .set("Authorization", "Bearer token-a")
+        .set("Content-Type", "application/json")
+        .send(b);
+      expect(r.status).toBe(403);
+      expect(r.body.error.code).toBe("AUTH-003");
+      expect(ctx.bundles.countAll()).toBe(0);
     } finally {
       ctx.cleanup();
     }

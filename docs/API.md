@@ -66,7 +66,7 @@ Possible results:
 { "status": "duplicate", "hubSeq": 42 }
 ```
 
-Errors: `BUNDLE-001` malformed/invalid content type (400/415), `BUNDLE-002` company mismatch (409), `BUNDLE-003` hash mismatch (surfaced as quarantined), `BUNDLE-004` duplicate event (quarantined), `BUNDLE-005` unsupported version, `BUNDLE-006` bundle id reused with different content (409), `BUNDLE-007` body too large (413), `AUTH-002` revoked, `RATE-001` limited.
+Errors: `BUNDLE-001` malformed/invalid content type (400/415), `BUNDLE-002` company mismatch (409), `BUNDLE-003` hash mismatch (surfaced as quarantined), `BUNDLE-004` duplicate event (quarantined), `BUNDLE-005` unsupported version, `BUNDLE-006` bundle id reused with different content (409), `BUNDLE-007` body too large (413), `AUTH-002` revoked, `AUTH-003` bundle `deviceId` does not match the authenticated device (403), `RATE-001` limited.
 
 Maximum request body is `limits.maxBodyBytes` (default 5 MB, 5242880 bytes). Oversized bodies return `413 BUNDLE-007`.
 

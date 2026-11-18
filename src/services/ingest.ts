@@ -55,6 +55,10 @@ export class IngestService {
       throw new ApiError(409, "BUNDLE-002", "Company mismatch.");
     }
 
+    if (bundle.deviceId !== device.id) {
+      throw new ApiError(403, "AUTH-003", "Bundle device does not match authenticated device.");
+    }
+
     const recomputedPayloadHash = payloadHash(bundle.payload);
     const recomputedBundleHash = bundleHashFromBundle(bundle);
     const hashMismatch = recomputedPayloadHash !== bundle.payloadHash || recomputedBundleHash !== bundle.bundleHash;
