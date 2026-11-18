@@ -103,6 +103,16 @@ export function makeApp(ctx: TestCtx) {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: ctx.config.limits.maxBodyBytes }));
+  app.use((req, res, next) => {
+    if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH") {
+      const ct = req.header("content-type") || "";
+      if (!ct.includes("application/json")) {
+        res.status(415).json({ error: { code: "BUNDLE-001", message: "Content-Type must be application/json.", details: {} } });
+        return;
+      }
+    }
+    next();
+  });
   app.get("/healthz", (_req, res) => res.json({ ok: true, version: "0.1.1" }));
   app.get("/", uiHandler(ctx.config, ctx.bundles, ctx.devices));
   app.get("/api/v1/status", requireDeviceOrAdmin(ctx.config, ctx.devices), statusHandler(ctx.config, ctx.bundles, ctx.devices));

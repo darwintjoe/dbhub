@@ -15,7 +15,7 @@ import { NullTarget } from "./services/replica/null-target";
 import { FolderTarget } from "./services/replica/folder-target";
 import { requireAdmin, requireDevice, requireDeviceOrAdmin } from "./http/auth";
 import { rateLimitMiddleware } from "./http/rate-limit";
-import { errorHandler } from "./http/errors";
+import { createErrorHandler } from "./http/errors";
 import { statusHandler } from "./http/routes/status";
 import { devicesRoutes } from "./http/routes/devices";
 import { relayRoutes } from "./http/routes/relay";
@@ -101,7 +101,7 @@ function main() {
   app.use("/api/v1/pull", deviceAuth, pullRoutes(bundles));
   app.use("/api/v1/manifest", deviceAuth, manifestRoutes(config, manifests));
 
-  app.use(errorHandler);
+  app.use(createErrorHandler(logger));
 
   const server = app.listen(config.port, config.host, () => {
     logger.info({ host: config.host, port: config.port }, "listening");

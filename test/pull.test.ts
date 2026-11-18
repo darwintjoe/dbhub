@@ -70,7 +70,10 @@ describe("pull and manifest", () => {
       const b = makeBundle(d.id, null);
       const res = svc.ingest(b, d) as { hubSeq: number };
       ctx.db.prepare("UPDATE bundles SET chain_hash=? WHERE hub_seq=?").run("f".repeat(64), res.hubSeq);
-      const r = await request(app).post("/api/v1/admin/maintenance/verify-chain").set(admin);
+      const r = await request(app)
+        .post("/api/v1/admin/maintenance/verify-chain")
+        .set(admin)
+        .set("Content-Type", "application/json");
       expect(r.status).toBe(200);
       expect(r.body.ok).toBe(false);
       expect(r.body.firstBadHubSeq).toBe(res.hubSeq);
