@@ -210,6 +210,11 @@ export class BundlesRepo {
     return r.c;
   }
 
+  countAll(): number {
+    const r = this.db.prepare("SELECT COUNT(*) AS c FROM bundles").get() as { c: number };
+    return r.c;
+  }
+
   countEvents(): number {
     const r = this.db.prepare("SELECT COUNT(*) AS c FROM events").get() as { c: number };
     return r.c;

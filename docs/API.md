@@ -66,7 +66,9 @@ Possible results:
 { "status": "duplicate", "hubSeq": 42 }
 ```
 
-Errors: `BUNDLE-001` malformed, `BUNDLE-002` company mismatch (409), `BUNDLE-003` hash mismatch (surfaced as quarantined), `BUNDLE-004` duplicate event (quarantined), `BUNDLE-005` unsupported version, `AUTH-002` revoked, `RATE-001` limited, `413` body too large.
+Errors: `BUNDLE-001` malformed, `BUNDLE-002` company mismatch (409), `BUNDLE-003` hash mismatch (surfaced as quarantined), `BUNDLE-004` duplicate event (quarantined), `BUNDLE-005` unsupported version, `BUNDLE-006` bundle id reused with different content (409), `AUTH-002` revoked, `RATE-001` limited.
+
+Idempotency: retries are checked **before** any insert. Retrying a quarantined bundle returns `200 { "status": "quarantined", "reason": ... }` with no new row; retrying an accepted bundle returns `duplicate`.
 
 ## Pull bundles
 

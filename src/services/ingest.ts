@@ -62,7 +62,27 @@ export class IngestService {
     const now = new Date().toISOString();
 
     const tx = this.db.transaction(() => {
-      // Hash mismatch -> quarantine
+      // Idempotency/conflict BEFORE any insert. Retrying a tampered bundle
+      // must never hit UNIQUE(bundle_id) / UNIQUE(bundle_hash) and 500.
+      const byId = this.bundles.findByBundleId(bundle.bundleId);
+      if (byId) {
+        if (byId.bundleHash !== bundle.bundleHash) {
+          throw new ApiError(409, "BUNDLE-006", "Bundle id already used with different content.");
+        }
+        if (byId.status === "quarantined") {
+          return { status: "quarantined" as const, reason: byId.quarantineReason ?? "unknown" };
+        }
+        return { status: "duplicate" as const, hubSeq: byId.hubSeq };
+      }
+      const byHash = this.bundles.findByBundleHash(bundle.bundleHash);
+      if (byHash) {
+        if (byHash.status === "quarantined") {
+          return { status: "quarantined" as const, reason: byHash.quarantineReason ?? "unknown" };
+        }
+        return { status: "duplicate" as const, hubSeq: byHash.hubSeq };
+      }
+
+      // Hash mismatch -> quarantine (only for genuinely new bundles).
       if (hashMismatch) {
         const hubSeq = this.bundles.insert({
           bundle_id: bundle.bundleId,
@@ -89,12 +109,6 @@ export class IngestService {
         });
         this.audit.log(now, device.id, "bundle.quarantined", { reason: "hash_mismatch", hubSeq });
         return { status: "quarantined" as const, reason: "hash_mismatch" };
-      }
-
-      // Idempotency
-      const existing = this.bundles.findByBundleId(bundle.bundleId) ?? this.bundles.findByBundleHash(bundle.bundleHash);
-      if (existing) {
-        return { status: "duplicate" as const, hubSeq: existing.hubSeq };
       }
 
       // Duplicate events
