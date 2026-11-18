@@ -1,0 +1,44 @@
+{
+  "name": "fazai-hub",
+  "version": "0.1.0",
+  "description": "FAZAI local sync hub (Windows service)",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "config:init": "node scripts/config-init.mjs",
+    "simulate": "node scripts/simulate-devices.mjs",
+    "verify-chain": "node scripts/verify-chain.mjs",
+    "service:install": "node src/bin/service-install.cjs",
+    "service:uninstall": "node src/bin/service-uninstall.cjs",
+    "service:start": "sc start FazaiHub",
+    "service:stop": "sc stop FazaiHub",
+    "service:status": "sc query FazaiHub"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.0",
+    "express": "^4.21.2",
+    "pino": "^9.5.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.5",
+    "@types/supertest": "^6.0.2",
+    "node-windows": "^1.0.0-beta.8",
+    "pino-pretty": "^13.0.0",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

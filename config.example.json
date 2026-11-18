@@ -1,0 +1,12 @@
+{
+  "companyId": "cmp_dev_001",
+  "replicaId": "hub_dev_001",
+  "port": 8787,
+  "host": "0.0.0.0",
+  "adminTokenHash": "REPLACE_WITH_SHA256_OF_ADMIN_TOKEN",
+  "dataDir": "./data",
+  "logDir": "./logs",
+  "storage": { "target": "null", "folderPath": "" },
+  "limits": { "maxBodyBytes": 5242880, "ratePerMinutePerDevice": 120, "ratePerMinutePerIp": 300 },
+  "quarantine": { "pendingParentTimeoutMs": 86400000 }
+}

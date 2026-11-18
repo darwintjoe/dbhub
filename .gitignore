@@ -1,0 +1,12 @@
+node_modules/
+dist/
+data/
+logs/
+daemon/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+config.json
+.env
+coverage/
