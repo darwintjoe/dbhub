@@ -66,6 +66,28 @@ export class DevicesRepo {
     this.revokeStmt.run(id);
   }
 
+  prefixExists(companyId: string, prefix: string): boolean {
+    const r = this.db
+      .prepare("SELECT 1 FROM devices WHERE company_id=? AND prefix=? LIMIT 1")
+      .get(companyId, prefix);
+    return Boolean(r);
+  }
+
+  /** One transaction; on a prefix race, retry once with the next suggestion. */
+  createWithRetry(device: DeviceRow, explicit: boolean): { ok: true; prefix: string } | { ok: false } {
+    return this.db.transaction(() => {
+      if (explicit && this.prefixExists(device.companyId, device.prefix)) return { ok: false as const };
+      if (!this.prefixExists(device.companyId, device.prefix)) {
+        this.create(device);
+        return { ok: true as const, prefix: device.prefix };
+      }
+      const retryPrefix = this.suggestPrefix(device.companyId);
+      if (this.prefixExists(device.companyId, retryPrefix)) return { ok: false as const };
+      this.create({ ...device, prefix: retryPrefix });
+      return { ok: true as const, prefix: retryPrefix };
+    })();
+  }
+
   suggestPrefix(companyId: string): string {
     const used = new Set(this.list(companyId).map((d) => d.prefix));
     for (let i = 0; i < 26; i++) {

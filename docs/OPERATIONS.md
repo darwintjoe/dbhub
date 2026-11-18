@@ -3,7 +3,7 @@
 ## Requirements
 
 - Windows 10/11 x64
-- Node.js 20 LTS or 22 LTS in production (this workspace built on Node 24; pin 20/22 on target hosts)
+- **Node.js 22 LTS in production** (v0.1.1 target). Node 24 dev host is supported for building/testing only.
 - Elevated PowerShell for install/uninstall
 
 ## Install
@@ -63,28 +63,24 @@ netsh advfirewall firewall delete rule name="Fazai Hub"
 4. Start service: `npm run service:start`.
 5. Check `/healthz` and `/api/v1/status`.
 
-Migrations are ordered and applied via `PRAGMA user_version`; re-opening an up-to-date DB is a no-op.
+Migrations are ordered and applied via `PRAGMA user_version`; re-opening an up-to-date DB is a no-op. v1 → v2 adds `accepted_seq`, outbox leases, and event reservations, and performs a one-time chain rehash. **Delete test replica folders and re-export after upgrading from v0.1.0.**
 
-## Backup
+Moving the install directory requires `.\scripts\uninstall.ps1` then `.\scripts\install.ps1` from the new path; the service stores absolute `script` and `workingDirectory` values.
 
-Stop service or use SQLite backup while running (WAL). Simplest safe copy:
+## Backup and restore
+
+Never copy `hub.sqlite` while the service is writing. WAL means the main file alone is not a consistent snapshot. Use this procedure:
 
 ```powershell
 npm run service:stop
-Copy-Item C:\ProgramData\FazaiHub\data\hub.sqlite* C:\backup\ -Force
+# checkpoint WAL into the main database
+node -e "const D=require('better-sqlite3');const d=new D('C:\\ProgramData\\FazaiHub\\data\\hub.sqlite');d.pragma('wal_checkpoint(TRUNCATE)');d.close();"
+Copy-Item C:\ProgramData\FazaiHub\data\hub.sqlite C:\backup\ -Force
+Copy-Item C:\ProgramData\FazaiHub\config.json C:\backup\ -Force
 npm run service:start
 ```
 
-Also back up `C:\ProgramData\FazaiHub\config.json` (contains token hashes, not tokens).
-
-## Rollback
-
-1. Stop service.
-2. Restore `hub.sqlite`, `hub.sqlite-wal`, `hub.sqlite-shm`, and prior `config.json`.
-3. Restore prior `dist` or source, rebuild.
-4. Start service and verify.
-
-Do not restore a newer DB into an older binary that lacks its migrations.
+Restore: stop the service, copy the saved `hub.sqlite` (and matching `config.json`) back, then start and verify `/healthz`, `/api/v1/status`, and chain verify. Do not restore a newer DB into an older binary that lacks its migrations.
 
 ## Node upgrade / better-sqlite3 rebuild
 

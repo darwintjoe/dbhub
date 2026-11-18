@@ -19,25 +19,31 @@ export function devicesRoutes(config: Config, devices: DevicesRepo, audit: Audit
   router.post("/", (req: Request, res: Response) => {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, "BUNDLE-001", "Malformed request body.", { details: parsed.error.flatten() });
+    const explicit = parsed.data.prefix !== undefined;
     const prefix = parsed.data.prefix ?? devices.suggestPrefix(config.companyId);
-    // ensure uniqueness
     const id = `dev_${randomUUID()}`;
     const token = `fzh_${randomBytes(32).toString("base64url")}`;
     const tokenH = sha256Hex(token);
     const now = new Date().toISOString();
-    devices.create({
-      id,
-      companyId: config.companyId,
-      prefix,
-      label: parsed.data.label,
-      tokenHash: tokenH,
-      status: "approved",
-      createdAt: now,
-      lastSeenAt: null,
-    });
-    audit.log(now, "admin", "device.created", { deviceId: id, prefix });
+    const created = devices.createWithRetry(
+      {
+        id,
+        companyId: config.companyId,
+        prefix,
+        label: parsed.data.label,
+        tokenHash: tokenH,
+        status: "approved",
+        createdAt: now,
+        lastSeenAt: null,
+      },
+      explicit,
+    );
+    if (!created.ok) {
+      throw new ApiError(409, "BUNDLE-006", "Prefix already in use.");
+    }
+    audit.log(now, "admin", "device.created", { deviceId: id, prefix: created.prefix });
     const hubUrl = `http://${req.get("host") ?? `localhost:${config.port}`}`;
-    res.status(201).json({ deviceId: id, prefix, token, hubUrl });
+    res.status(201).json({ deviceId: id, prefix: created.prefix, token, hubUrl });
   });
 
   router.get("/", (_req: Request, res: Response) => {

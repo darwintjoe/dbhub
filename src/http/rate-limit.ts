@@ -3,15 +3,29 @@ import type { Config } from "../config";
 import { sha256Hex } from "../domain/hashing";
 import { ApiError } from "./errors";
 
-interface Bucket {
-  tokens: number;
-  lastRefill: number;
+export interface RateLimiter {
+  (req: Request, res: Response, next: NextFunction): void;
+  bucketCount(): number;
 }
 
-export function rateLimitMiddleware(config: Config) {
+const IDLE_EVICTION_MS = 10 * 60 * 1000;
+const MAX_BUCKETS = 10_000;
+
+export function rateLimitMiddleware(config: Config): RateLimiter {
   const buckets = new Map<string, Bucket>();
   const capacityDevice = config.limits.ratePerMinutePerDevice;
   const capacityIp = config.limits.ratePerMinutePerIp;
+
+  function evictIdle(now: number): void {
+    for (const [key, bucket] of buckets) {
+      if (now - bucket.lastRefill > IDLE_EVICTION_MS) buckets.delete(key);
+    }
+    while (buckets.size >= MAX_BUCKETS) {
+      const oldest = buckets.keys().next();
+      if (oldest.done) break;
+      buckets.delete(oldest.value);
+    }
+  }
 
   function consume(key: string, capacity: number): { ok: boolean; retryAfter: number } {
     const now = Date.now();
@@ -32,7 +46,8 @@ export function rateLimitMiddleware(config: Config) {
     return { ok: false, retryAfter: Math.max(1, retryAfter) };
   }
 
-  return (req: Request, res: Response, next: NextFunction) => {
+  const middleware = ((req: Request, res: Response, next: NextFunction) => {
+    evictIdle(Date.now());
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     const ipResult = consume(`ip:${ip}`, capacityIp);
     if (!ipResult.ok) {
@@ -50,5 +65,13 @@ export function rateLimitMiddleware(config: Config) {
       }
     }
     next();
-  };
+  }) as RateLimiter;
+
+  middleware.bucketCount = () => buckets.size;
+  return middleware;
+}
+
+interface Bucket {
+  tokens: number;
+  lastRefill: number;
 }
