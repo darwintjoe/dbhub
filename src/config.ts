@@ -3,7 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 
 const storageSchema = z.object({
-  target: z.enum(["null", "folder", "s3", "drive"]).default("null"),
+  target: z.enum(["null", "folder"]).default("null"),
   folderPath: z.string().default(""),
 });
 
