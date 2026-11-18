@@ -220,7 +220,8 @@ if (st.counts.quarantined < 1) {
 // Pull all accepted bundles in order.
 let since = 0;
 let pulled = 0;
-let lastSeq = 0;
+let lastAcceptedSeq = 0;
+let lastHubSeq = 0;
 while (true) {
   const r = await fetch(base + `/api/v1/pull?since=${since}&limit=200`, {
     headers: { Authorization: `Bearer ${deviceBundles[0].device.token}` },
@@ -228,11 +229,12 @@ while (true) {
   const j = await r.json();
   if (!j.bundles.length) break;
   for (const b of j.bundles) {
-    if (b.hubSeq <= lastSeq) {
+    if (b.acceptedSeq <= lastAcceptedSeq) {
       ok = false;
-      failures.push("pull not ordered");
+      failures.push("pull not ordered by acceptedSeq");
     }
-    lastSeq = b.hubSeq;
+    lastAcceptedSeq = b.acceptedSeq;
+    lastHubSeq = b.hubSeq;
   }
   pulled += j.bundles.length;
   since = j.nextSince;
@@ -260,9 +262,9 @@ const mr = await fetch(base + "/api/v1/manifest", {
   headers: { Authorization: `Bearer ${deviceBundles[0].device.token}` },
 });
 const m = await mr.json();
-if (m.latestHubSeq !== lastSeq) {
+if (m.latestHubSeq !== lastHubSeq) {
   ok = false;
-  failures.push(`manifest latest ${m.latestHubSeq} !== ${lastSeq}`);
+  failures.push(`manifest latest ${m.latestHubSeq} !== ${lastHubSeq}`);
 }
 if (m.latestAcceptedSeq !== 300) {
   ok = false;
