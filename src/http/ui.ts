@@ -39,7 +39,7 @@ th,td{padding:6px 8px;border-bottom:1px solid #eee;text-align:left;font-size:13p
 </style></head><body>
 <h1>FAZAI Hub <span class="badge">${esc(config.companyId)}</span></h1>
 <div class="card">
-<p>Version 0.1.1 | Uptime ${Math.floor(process.uptime())}s | Latest acceptedSeq ${latest ? (latest.acceptedSeq ?? 0) : 0} | Latest hubSeq (insertion order) ${insertionHead ? insertionHead.hubSeq : 0}</p>
+<p>Version 0.1.2 | Uptime ${Math.floor(process.uptime())}s | Latest acceptedSeq ${latest ? (latest.acceptedSeq ?? 0) : 0} | Latest hubSeq (insertion order) ${insertionHead ? insertionHead.hubSeq : 0}</p>
 <p>Devices: ${counts.devices} | Accepted: ${counts.accepted} | Pending parent: ${counts.pendingParent} | Quarantined: ${counts.quarantined} | Events: ${counts.events}</p>
 <p>Latest chain hash: ${esc(latest ? latest.chainHash : "none")}</p>
 </div>

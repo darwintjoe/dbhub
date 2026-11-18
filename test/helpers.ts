@@ -113,7 +113,7 @@ export function makeApp(ctx: TestCtx) {
     }
     next();
   });
-  app.get("/healthz", (_req, res) => res.json({ ok: true, version: "0.1.1" }));
+  app.get("/healthz", (_req, res) => res.json({ ok: true, version: "0.1.2" }));
   app.get("/", uiHandler(ctx.config, ctx.bundles, ctx.devices));
   app.get("/api/v1/status", requireDeviceOrAdmin(ctx.config, ctx.devices), statusHandler(ctx.config, ctx.bundles, ctx.devices));
   app.use("/api/v1/admin", requireAdmin(ctx.config));

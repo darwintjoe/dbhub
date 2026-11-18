@@ -1,6 +1,6 @@
 {
   "name": "fazai-hub",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "FAZAI local sync hub (Windows service)",
   "private": true,
   "type": "commonjs",

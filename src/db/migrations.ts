@@ -144,6 +144,66 @@ CREATE TABLE IF NOT EXISTS pending_event_ids (
       db.prepare("UPDATE manifests SET latest_accepted_seq=?").run(seq);
     },
   },
+  {
+    version: 3,
+    // No schema change. v0.1.0 wrote events for pending bundles and never
+    // removed them on timeout, so those ids blocked legitimate later bundles.
+    up: (db) => {
+      db.prepare(
+        "DELETE FROM pending_event_ids WHERE bundle_id NOT IN (SELECT bundle_id FROM bundles WHERE status='pending_parent')",
+      ).run();
+      db.prepare(
+        "DELETE FROM events WHERE bundle_id IN (SELECT bundle_id FROM bundles WHERE status <> 'accepted')",
+      ).run();
+
+      const pending = db
+        .prepare("SELECT bundle_id, device_id, payload_json FROM bundles WHERE status='pending_parent'")
+        .all() as { bundle_id: string; device_id: string; payload_json: string }[];
+      const reserve = db.prepare(
+        "INSERT OR IGNORE INTO pending_event_ids (event_id, bundle_id, device_id) VALUES (?,?,?)",
+      );
+      const quarantine = db.prepare(
+        "UPDATE bundles SET status='quarantined', quarantine_reason=?, pending_since=NULL WHERE bundle_id=?",
+      );
+      const release = db.prepare("DELETE FROM pending_event_ids WHERE bundle_id=?");
+
+      for (const row of pending) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(row.payload_json);
+        } catch {
+          quarantine.run("migration_invalid_payload", row.bundle_id);
+          release.run(row.bundle_id);
+          continue;
+        }
+        if (!Array.isArray(parsed)) {
+          quarantine.run("migration_invalid_payload", row.bundle_id);
+          release.run(row.bundle_id);
+          continue;
+        }
+        const seen = new Set<string>();
+        let duplicate = false;
+        let malformed = false;
+        for (const value of parsed) {
+          const id = (value as { id?: unknown } | null)?.id;
+          if (typeof id !== "string") {
+            malformed = true;
+            continue;
+          }
+          if (seen.has(id)) {
+            duplicate = true;
+            continue;
+          }
+          seen.add(id);
+          reserve.run(id, row.bundle_id, row.device_id);
+        }
+        if (malformed || duplicate) {
+          quarantine.run(malformed ? "migration_invalid_payload" : "duplicate_event", row.bundle_id);
+          release.run(row.bundle_id);
+        }
+      }
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

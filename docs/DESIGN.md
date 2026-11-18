@@ -78,7 +78,7 @@ Backoff is exponential: `min(60s, 1s * 2^(attempts-1))`. After 10 attempts the r
 
 `ReplicaTarget` is the seam for a future Storage Abstraction Layer (SAL) and SaaS sequencing. No cloud code exists in v0.
 
-## Migration v1 → v2
+## Migrations v1 → v2 → v3
 
 Migration v2 is additive and idempotent:
 
@@ -88,7 +88,16 @@ Migration v2 is additive and idempotent:
 - adds `pending_event_ids`
 - backfills existing accepted rows in `hub_seq` order, assigns `accepted_seq = 1..n`, and recomputes their chain once
 
-**This one-time rehash invalidates replica files produced by v0.1.0.** Delete test replica folders and re-export them after upgrading.
+Migration v3 is data-only and idempotent:
+
+- deletes reservations not belonging to a currently pending bundle
+- deletes `events` rows attached to non-accepted bundles (the v0.1.0 pending/timeout leak)
+- backfills `pending_event_ids` from each remaining pending bundle's `payload_json`
+- marks unparseable payloads `migration_invalid_payload` and same-payload duplicates `duplicate_event`, releasing their reservations
+
+v3 does **not** recompute chain values; v2 already did that. Old pending bundles resume normal resolution after upgrade: their ids are reservations, not committed events.
+
+**v2's one-time rehash still invalidates replica files produced by v0.1.0.** Delete replica folders and re-export them after upgrading even though v3 cleans the event leak.
 
 ## Future SAL / SaaS mapping
 

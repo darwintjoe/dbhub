@@ -8,7 +8,7 @@ export function statusHandler(config: Config, bundles: BundlesRepo, devices: Dev
     const latest = bundles.acceptedHead();
     const insertionHead = bundles.lastAcceptedHead();
     res.json({
-      version: "0.1.1",
+      version: "0.1.2",
       companyId: config.companyId,
       uptimeSec: Math.floor(process.uptime()),
       counts: {

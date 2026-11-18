@@ -3,7 +3,7 @@
 ## Requirements
 
 - Windows 10/11 x64
-- **Node.js 22 LTS in production** (v0.1.1 target). Node 24 dev host is supported for building/testing only.
+- **Node.js 22 LTS in production** (v0.1.2 target). Node 24 dev host is supported for building/testing only.
 - Elevated PowerShell for install/uninstall
 
 ## Install
@@ -63,7 +63,7 @@ netsh advfirewall firewall delete rule name="Fazai Hub"
 4. Start service: `npm run service:start`.
 5. Check `/healthz` and `/api/v1/status`.
 
-Migrations are ordered and applied via `PRAGMA user_version`; re-opening an up-to-date DB is a no-op. v1 → v2 adds `accepted_seq`, outbox leases, and event reservations, and performs a one-time chain rehash. **Delete test replica folders and re-export after upgrading from v0.1.0.**
+Migrations are ordered and applied via `PRAGMA user_version`; re-opening an up-to-date DB is a no-op. v1 → v2 adds `accepted_seq`, outbox leases, and event reservations, and performs a one-time chain rehash. v3 cleans the v0.1.0 event leaks and backfills reservations, so old pending bundles resume normal resolution instead of quarantining as `duplicate_event`. **Replica re-export is still required after upgrading from v0.1.0 because v2 rehashed the chain.**
 
 Moving the install directory requires `.\scripts\uninstall.ps1` then `.\scripts\install.ps1` from the new path; the service stores absolute `script` and `workingDirectory` values.
 

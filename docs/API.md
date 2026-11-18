@@ -17,7 +17,7 @@ Auth:
 
 ```bash
 curl http://localhost:8787/healthz
-# { "ok": true, "version": "0.1.1" }
+# { "ok": true, "version": "0.1.2" }
 ```
 
 ## Admin: create device
