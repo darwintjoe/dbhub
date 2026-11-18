@@ -38,7 +38,9 @@ npm run simulate
 node scripts/verify-chain.mjs data/hub.sqlite
 ```
 
-Elevated install: `.\scripts\install.ps1`. Check: `sc.exe query DBHub`.
+Elevated install: `.\scripts\install.ps1`. Check: `sc.exe query dbhub.exe`.
+
+Windows Services displays the display name `DBHub`, but the command-line service ID is `dbhub.exe`.
 
 ## v0 limits
 

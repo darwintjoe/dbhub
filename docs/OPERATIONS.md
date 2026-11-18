@@ -8,10 +8,12 @@
 
 ## Install
 
+Windows Services displays the display name `DBHub`, but the command-line service ID is `dbhub.exe`.
+
 ```powershell
 cd C:\path\to\dbhub
 .\scripts\install.ps1
-sc.exe query DBHub
+sc.exe query dbhub.exe
 curl http://localhost:8787/healthz
 ```
 
@@ -96,7 +98,7 @@ If prebuilt binaries are unavailable, install Visual Studio Build Tools with "De
 
 ## Troubleshooting
 
-- `sc query DBHub` not RUNNING: `sc queryex DBHub`, check logs in `C:\ProgramData\DBHub\logs\hub-YYYY-MM-DD.log`.
+- `sc.exe query dbhub.exe` not RUNNING: `sc.exe queryex dbhub.exe`, check logs in `C:\ProgramData\DBHub\logs\hub-YYYY-MM-DD.log`.
 - Config error at startup: ensure `adminTokenHash` is 64 lowercase hex and data/log dirs writable.
 - Devices get 401: token wrong or device recreated (tokens shown once).
 - Bundles pending forever: parent not yet posted; after `pendingParentTimeoutMs` they quarantine as `missing_parent`.
@@ -105,29 +107,29 @@ If prebuilt binaries are unavailable, install Visual Studio Build Tools with "De
 ## Crash / restart test
 
 1. Start service, run `npm run simulate` against it.
-2. Mid-run: `Restart-Service DBHub`.
+2. Mid-run: `Restart-Service dbhub.exe`.
 3. After simulator exits, check `/api/v1/status`: accepted count should match expected, no duplicates, chain verify OK, manifest latest matches.
 
 Service auto-restart uses node-windows (`maxRestarts:10`, `wait:2`, `grow:0.25`) plus `sc.exe failure` actions restart at 5s/10s/30s.
 
 ## Acceptance record (2026-11-18)
 
-- Version: 0.2.0 (commit eb95164)
+- Version: 0.2.0
 - Node.js: 22.23.5 (portable user-level install; production target met for verification)
 - npm: 10.9.9
 - Rename check: zero case-insensitive `fazai` matches in tracked/untracked project files (excluding node_modules, dist, .git)
-- Tests: 61/61 passed
+- Tests: 61/61 passed (`npm test`; one initial timing-threshold flake passed on rerun)
 - Typecheck: `npx tsc -p tsconfig.json --noEmit` passed
 - Build: `npm run build` passed
 - Simulator: `npm run simulate` -> `SIMULATION PASSED` (accepted 300, quarantined 1, pulled/checked 300)
-- Service DBHub: NOT installed in this environment (no administrator elevation available); application process verified manually via `node dist/server.js` with `DBHUB_CONFIG=C:\ProgramData\DBHub\config.json`
+- Service ID: `dbhub.exe`; display name: `DBHub`; state: `RUNNING`; `/healthz`: `{"ok":true,"version":"0.2.0"}`
+- Recovery actions: restart at 5s/10s/30s, reset period 86400s; start type `AUTO_START`
+- Crash auto-restart: executed by stopping the listener PID with `Stop-Process -Force`; service recovered to `RUNNING`, `/healthz` passed, no outbox rows left in `uploading`
+- Graceful restart: `Restart-Service dbhub.exe` passed; clean startup logged; `wal_checkpoint(TRUNCATE)` returned `busy=0`
+- Backup/restore drill: passed (checkpoint, copy, restore, counts and chain verify matched; original DB retained as `hub.sqlite.pre-restore`)
+- Auto-start after reboot: not executed in this session (pending manual reboot verification)
+- LAN client push/pull from a second PC: not executed in this session
 - Config/data/logs: `C:\ProgramData\DBHub\{config.json,data,logs,replica}` (folder replica target used)
-- Auto-start after reboot: not executed (service not installed)
-- Crash auto-restart: not executed (service not installed)
-- Graceful restart/WAL checkpoint: manual process stop/start passed; `wal_checkpoint(TRUNCATE)` returned busy=0
-- LAN client push/pull: local smoke passed (device created, one accepted bundle, pull ordered by acceptedSeq, chain verify checked 1); second-LAN-PC leg not executed
-- Backup/restore drill: passed (checkpoint, copy, restore, status counts and chain verify matched; original DB retained as `hub.sqlite.pre-restore` until drill passed)
-- Deviations: Node installed per-user instead of system-wide; Windows service, reboot, and crash-restart acceptance steps could not be executed without elevation. Run `scripts/install.ps1` from an elevated PowerShell to complete those steps.
 - Deferred issues remain: pull response omits full bundle fields; zod advisory; rate limiter scans all buckets; duplicated version string; BUNDLE-006 overloaded; folder replica filenames sort by hubSeq; v3 defensive branches lack dedicated tests.
 
 ## v0 limitations / gaps

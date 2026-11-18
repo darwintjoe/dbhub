@@ -46,4 +46,9 @@ netsh advfirewall firewall delete rule name="DBHub" | Out-Null
 netsh advfirewall firewall add rule name="DBHub" dir=in action=allow protocol=TCP localport=8787
 if ($LASTEXITCODE -ne 0) { throw "firewall rule failed" }
 
-Write-Host "Done. Check with: sc query DBHub"
+Write-Host "[7/7] verify service"
+$svc = sc.exe query dbhub.exe
+if ($LASTEXITCODE -ne 0) { throw "service query failed" }
+if ($svc -notmatch "RUNNING") { throw "DBHub service is not RUNNING" }
+$svc
+Write-Host "Done. Check with: sc.exe query dbhub.exe"

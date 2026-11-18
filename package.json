@@ -19,9 +19,9 @@
     "verify-chain": "node scripts/verify-chain.mjs",
     "service:install": "node src/bin/service-install.cjs",
     "service:uninstall": "node src/bin/service-uninstall.cjs",
-    "service:start": "sc start DBHub",
-    "service:stop": "sc stop DBHub",
-    "service:status": "sc query DBHub"
+    "service:start": "sc.exe start dbhub.exe",
+    "service:stop": "sc.exe stop dbhub.exe",
+    "service:status": "sc.exe query dbhub.exe"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.0",
