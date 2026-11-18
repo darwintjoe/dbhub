@@ -262,6 +262,7 @@ const mr = await fetch(base + "/api/v1/manifest", {
   headers: { Authorization: `Bearer ${deviceBundles[0].device.token}` },
 });
 const m = await mr.json();
+console.log("manifest", JSON.stringify(m));
 if (m.latestHubSeq !== lastHubSeq) {
   ok = false;
   failures.push(`manifest latest ${m.latestHubSeq} !== ${lastHubSeq}`);
