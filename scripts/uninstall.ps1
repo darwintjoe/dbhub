@@ -1,4 +1,6 @@
 #requires -RunAsAdministrator
+# WINDOWS-ONLY: elevated Windows uninstaller (service removal + netsh firewall).
+# Linux packaging is not implemented yet; see docs/PLATFORM.md for the contract.
 param(
   [switch]$PurgeData
 )

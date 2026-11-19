@@ -10,6 +10,22 @@ interface DeviceDbRow {
   status: string;
   created_at: string;
   last_seen_at: string | null;
+  scopes_json: string | null;
+  platform: string | null;
+  app_version: string | null;
+  paired_at: string | null;
+  token_expires_at: string | null;
+  public_key: string | null;
+}
+
+function parseScopes(v: string | null): string[] {
+  if (!v) return ["relay:write", "pull:read", "manifest:read"];
+  try {
+    const parsed = JSON.parse(v);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
 }
 
 function mapRow(r: DeviceDbRow): DeviceRow {
@@ -22,6 +38,12 @@ function mapRow(r: DeviceDbRow): DeviceRow {
     status: r.status as DeviceRow["status"],
     createdAt: r.created_at,
     lastSeenAt: r.last_seen_at,
+    scopes: parseScopes(r.scopes_json),
+    platform: r.platform,
+    appVersion: r.app_version,
+    pairedAt: r.paired_at,
+    tokenExpiresAt: r.token_expires_at,
+    publicKey: r.public_key,
   };
 }
 
@@ -36,7 +58,7 @@ export class DevicesRepo {
   constructor(db: Database.Database) {
     this.db = db;
     this.insertStmt = db.prepare(
-      "INSERT INTO devices (id, company_id, prefix, label, token_hash, status, created_at) VALUES (?,?,?,?,?,?,?)",
+      "INSERT INTO devices (id, company_id, prefix, label, token_hash, status, created_at, scopes_json, platform, app_version, paired_at, token_expires_at, public_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
     );
     this.byIdStmt = db.prepare("SELECT * FROM devices WHERE id = ?");
     this.byTokenHashStmt = db.prepare("SELECT * FROM devices WHERE token_hash = ?");
@@ -45,7 +67,21 @@ export class DevicesRepo {
   }
 
   create(d: DeviceRow): void {
-    this.insertStmt.run(d.id, d.companyId, d.prefix, d.label, d.tokenHash, d.status, d.createdAt);
+    this.insertStmt.run(
+      d.id,
+      d.companyId,
+      d.prefix,
+      d.label,
+      d.tokenHash,
+      d.status,
+      d.createdAt,
+      JSON.stringify(d.scopes ?? ["relay:write", "pull:read", "manifest:read"]),
+      d.platform ?? null,
+      d.appVersion ?? null,
+      d.pairedAt ?? null,
+      d.tokenExpiresAt ?? null,
+      d.publicKey ?? null,
+    );
   }
 
   findById(id: string): DeviceRow | null {
@@ -62,8 +98,29 @@ export class DevicesRepo {
     return (this.listStmt.all(companyId) as DeviceDbRow[]).map(mapRow);
   }
 
+  count(companyId?: string): number {
+    if (companyId) return (this.db.prepare("SELECT COUNT(*) AS c FROM devices WHERE company_id=?").get(companyId) as { c: number }).c;
+    return (this.db.prepare("SELECT COUNT(*) AS c FROM devices").get() as { c: number }).c;
+  }
+
   revoke(id: string): void {
     this.revokeStmt.run(id);
+  }
+
+  updateLabel(id: string, label: string): void {
+    this.db.prepare("UPDATE devices SET label=? WHERE id=?").run(label, id);
+  }
+
+  updateTokenHash(id: string, tokenHash: string, tokenExpiresAt: string | null = null): void {
+    this.db.prepare("UPDATE devices SET token_hash=?, token_expires_at=? WHERE id=?").run(tokenHash, tokenExpiresAt, id);
+  }
+
+  updateScopes(id: string, scopes: string[]): void {
+    this.db.prepare("UPDATE devices SET scopes_json=? WHERE id=?").run(JSON.stringify(scopes), id);
+  }
+
+  updateLastSeen(id: string, at: string): void {
+    this.db.prepare("UPDATE devices SET last_seen_at=? WHERE id=?").run(at, id);
   }
 
   prefixExists(companyId: string, prefix: string): boolean {

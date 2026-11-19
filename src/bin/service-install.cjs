@@ -1,10 +1,12 @@
+// WINDOWS-ONLY: service registration via sc.exe / winsw. Not used on Linux.
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 
 const root = path.resolve(__dirname, "..", "..");
 const script = path.join(root, "dist", "server.js");
-const configPath = process.env.DBHUB_CONFIG || "C:\\ProgramData\\DBHub\\config.json";
+const platformPaths = require(path.join(root, "src", "platform", "paths-impl.cjs"));
+const configPath = process.env.DBHUB_CONFIG || platformPaths.defaultConfigPath();
 const daemonDir = path.join(root, "dist", "daemon");
 const serviceId = "dbhub.exe";
 const fileBase = "dbhub";

@@ -204,6 +204,76 @@ CREATE TABLE IF NOT EXISTS pending_event_ids (
       }
     },
   },
+  {
+    version: 4,
+    sql: `
+CREATE TABLE IF NOT EXISTS app_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS admin_credentials (
+  id INTEGER PRIMARY KEY CHECK(id=1),
+  password_hash TEXT NOT NULL,
+  recovery_hash TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  id TEXT PRIMARY KEY,
+  token_hash TEXT NOT NULL,
+  csrf_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  last_seen_at TEXT,
+  ip TEXT,
+  user_agent TEXT
+);
+
+CREATE TABLE IF NOT EXISTS pairing_sessions (
+  id TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL,
+  qr_secret_hash TEXT,
+  label TEXT NOT NULL,
+  role TEXT NOT NULL,
+  scopes_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  require_approval INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  claimed_at TEXT,
+  approved_at TEXT,
+  device_id TEXT
+);
+`,
+    up: (db) => {
+      const cols = (db.pragma("table_info(devices)") as { name: string }[]).map((c) => c.name);
+      const add = (name: string, ddl: string) => {
+        if (!cols.includes(name)) db.exec(`ALTER TABLE devices ADD COLUMN ${name} ${ddl}`);
+      };
+      add("scopes_json", "TEXT");
+      add("platform", "TEXT");
+      add("app_version", "TEXT");
+      add("paired_at", "TEXT");
+      add("token_expires_at", "TEXT");
+      add("public_key", "TEXT");
+      db.prepare("UPDATE devices SET scopes_json = ? WHERE scopes_json IS NULL OR scopes_json = ''").run(
+        JSON.stringify(["relay:write", "pull:read", "manifest:read"]),
+      );
+    },
+  },
+  {
+    version: 5,
+    up: (db) => {
+      const cols = (db.pragma("table_info(pairing_sessions)") as { name: string }[]).map((c) => c.name);
+      if (!cols.includes("qr_payload_enc")) {
+        db.exec("ALTER TABLE pairing_sessions ADD COLUMN qr_payload_enc TEXT");
+      }
+      db.prepare("DELETE FROM app_state WHERE key LIKE 'pairing.%.qrPayload'").run();
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

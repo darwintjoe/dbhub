@@ -17,7 +17,7 @@ Auth:
 
 ```bash
 curl http://localhost:8787/healthz
-# { "ok": true, "version": "0.2.0" }
+# { "ok": true, "version": "0.3.0" }
 ```
 
 ## Admin: create device
@@ -144,3 +144,28 @@ curl http://localhost:8787/
 ```
 
 Read-only HTML. No payloads or tokens displayed.
+## Appliance endpoints (additive)
+
+### Setup and session
+- `POST /api/v1/admin/setup` `{code,password,companyName,timezone}` (LAN/private IP only, one-time code)
+- `POST /api/v1/admin/session` `{password}` (sets `dbhub_admin` cookie)
+- `GET /api/v1/admin/session` -> `{authenticated, setupRequired, csrfToken}`
+- `DELETE /api/v1/admin/session` logout
+
+### Pairing
+- `POST /api/v1/admin/pairings` `{label, role, scopes, network, requireApproval}`
+- `GET /api/v1/admin/pairings/:id`
+- `POST /api/v1/admin/pairings/:id/approve`
+- `DELETE /api/v1/admin/pairings/:id`
+- `GET /api/v1/admin/pairings/:id/qr.svg`
+- `POST /api/v1/pair/claim` `{pairingId, code, device:{...}}` (both listeners)
+
+### Connectivity
+- `GET/PUT /api/v1/admin/connectivity`
+- `POST /api/v1/admin/connectivity/restart`
+- `POST /api/v1/admin/connectivity/rotate-token`
+- `POST /api/v1/admin/connectivity/test`
+
+### Diagnostics/bootstrap
+- `GET /api/v1/admin/diagnostics`
+- `GET /api/v1/admin/bootstrap`

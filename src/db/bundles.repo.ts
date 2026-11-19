@@ -163,7 +163,32 @@ export class BundlesRepo {
   }
 
   quarantineList(status: string, limit: number): { bundleId: string; deviceId: string; reason: string | null; receivedAt: string; hubSeq: number; status: string }[] {
-    return (this.quarantineListStmt.all(status, limit) as {
+    return this.quarantineListFiltered({ status, limit });
+  }
+
+  quarantineListFiltered(opts: {
+    status?: string;
+    reason?: string;
+    deviceId?: string;
+    limit?: number;
+    offset?: number;
+  }): { bundleId: string; deviceId: string; reason: string | null; receivedAt: string; hubSeq: number; status: string }[] {
+    const status = opts.status ?? "quarantined";
+    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+    const offset = Math.max(opts.offset ?? 0, 0);
+    const where: string[] = ["status = ?"];
+    const params: unknown[] = [status];
+    if (opts.reason) {
+      where.push("quarantine_reason = ?");
+      params.push(opts.reason);
+    }
+    if (opts.deviceId) {
+      where.push("device_id = ?");
+      params.push(opts.deviceId);
+    }
+    const sql = `SELECT bundle_id, device_id, quarantine_reason, received_at, hub_seq, status FROM bundles WHERE ${where.join(" AND ")} ORDER BY hub_seq DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+    return (this.db.prepare(sql).all(...params) as {
       bundle_id: string;
       device_id: string;
       quarantine_reason: string | null;
@@ -178,6 +203,11 @@ export class BundlesRepo {
       hubSeq: r.hub_seq,
       status: r.status,
     }));
+  }
+
+  countByDeviceAndStatus(deviceId: string, status: string): number {
+    const r = this.db.prepare("SELECT COUNT(*) AS c FROM bundles WHERE device_id=? AND status=?").get(deviceId, status) as { c: number };
+    return r.c;
   }
 
   quarantineDetail(bundleId: string): StoredBundle | null {
@@ -256,6 +286,29 @@ export class BundlesRepo {
   countDevices(): number {
     const r = this.db.prepare("SELECT COUNT(*) AS c FROM devices").get() as { c: number };
     return r.c;
+  }
+
+  /** Accepted bundles received since an ISO timestamp, grouped by device_id. */
+  countRecentByDevice(sinceIso: string): Record<string, number> {
+    const rows = this.db
+      .prepare("SELECT device_id, COUNT(*) AS c FROM bundles WHERE status='accepted' AND received_at >= ? GROUP BY device_id")
+      .all(sinceIso) as { device_id: string; c: number }[];
+    const out: Record<string, number> = {};
+    for (const r of rows ?? []) out[r.device_id] = Number(r.c);
+    return out;
+  }
+
+  /** Events attached to accepted bundles received since an ISO timestamp, grouped by device_id. */
+  countRecentEventsByDevice(sinceIso: string): Record<string, number> {
+    const rows = this.db
+      .prepare(
+        "SELECT e.device_id AS device_id, COUNT(*) AS c FROM events e JOIN bundles b ON b.bundle_id = e.bundle_id " +
+        "WHERE b.status='accepted' AND b.received_at >= ? GROUP BY e.device_id",
+      )
+      .all(sinceIso) as { device_id: string; c: number }[];
+    const out: Record<string, number> = {};
+    for (const r of rows ?? []) out[r.device_id] = Number(r.c);
+    return out;
   }
 
   lastReceivedAt(): string | null {

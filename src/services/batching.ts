@@ -15,6 +15,8 @@ export class BatchingService {
   private readonly leaseMs: number;
   private timer: NodeJS.Timeout | null = null;
   private running: Promise<void> | null = null;
+  public lastRunAt: string | null = null;
+  public lastErrorAt: string | null = null;
 
   constructor(
     db: Database.Database,
@@ -56,6 +58,7 @@ export class BatchingService {
   }
 
   private async runOnce(now: string): Promise<void> {
+    this.lastRunAt = now;
     // Reclaim leases that expired because the previous process died mid-upload.
     this.outbox.resetExpiredLeases(now);
     const rows = this.outbox.duePending(now, 20);
@@ -83,6 +86,7 @@ export class BatchingService {
         );
       } catch (e) {
         if (!this.outbox.claimIfStillLeased(row.id, leaseExpiresAt)) continue;
+        this.lastErrorAt = new Date().toISOString();
         const err = e instanceof Error ? e.message : String(e);
         const backoff = Math.min(60_000, 1000 * Math.pow(2, attempts - 1));
         const next = new Date(Date.now() + backoff).toISOString();

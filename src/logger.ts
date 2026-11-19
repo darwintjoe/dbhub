@@ -2,6 +2,7 @@
 import path from "node:path";
 import pino from "pino";
 import type { Config } from "./config";
+import { VERSION } from "./domain/types";
 
 function ensureDir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });
@@ -54,7 +55,7 @@ export function createLogger(config: Config) {
   const logger = pino(
     {
       level: process.env.LOG_LEVEL || "info",
-      base: { service: "dbhub", version: "0.2.0" },
+      base: { service: "dbhub", version: VERSION },
       redact: {
         paths: ["req.headers.authorization", "*.token", "*.payload", "payload", "token"],
         censor: "[redacted]",

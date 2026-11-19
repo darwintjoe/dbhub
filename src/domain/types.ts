@@ -1,4 +1,4 @@
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 export const SUPPORTED_SCHEMA_VERSION = 1;
 export const SUPPORTED_BUNDLE_FORMAT_VERSION = 1;
 
@@ -52,9 +52,15 @@ export interface DeviceRow {
   prefix: string;
   label: string;
   tokenHash: string;
-  status: "approved" | "revoked";
+  status: "approved" | "revoked" | "pending";
   createdAt: string;
   lastSeenAt: string | null;
+  scopes?: string[];
+  platform?: string | null;
+  appVersion?: string | null;
+  pairedAt?: string | null;
+  tokenExpiresAt?: string | null;
+  publicKey?: string | null;
 }
 
 export interface StoredBundle {

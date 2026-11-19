@@ -1,3 +1,4 @@
+// WINDOWS-ONLY: service removal via sc.exe / winsw. Not used on Linux.
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");

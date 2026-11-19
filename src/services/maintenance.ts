@@ -16,6 +16,10 @@ export class MaintenanceService {
   private readonly bundles: BundlesRepo;
   private readonly config: Config;
   private timer: NodeJS.Timeout | null = null;
+  public lastVerify: ChainVerifyResult | null = null;
+  public lastVerifyAt: string | null = null;
+  public lastSweepAt: string | null = null;
+  public lastCheckpointAt: string | null = null;
 
   constructor(db: Database.Database, bundles: BundlesRepo, config: Config) {
     this.db = db;
@@ -24,6 +28,7 @@ export class MaintenanceService {
   }
 
   sweepPendingParents(now = new Date().toISOString()): number {
+    this.lastSweepAt = now;
     const timeout = this.config.quarantine.pendingParentTimeoutMs;
     const pending = this.db
       .prepare("SELECT hub_seq, pending_since FROM bundles WHERE status='pending_parent'")
@@ -42,6 +47,13 @@ export class MaintenanceService {
   }
 
   verifyChain(): ChainVerifyResult {
+    const result = this.doVerify();
+    this.lastVerify = result;
+    this.lastVerifyAt = new Date().toISOString();
+    return result;
+  }
+
+  private doVerify(): ChainVerifyResult {
     const rows = this.db
       .prepare("SELECT hub_seq, accepted_seq, bundle_hash, chain_prev_hash, chain_hash FROM bundles WHERE status='accepted' ORDER BY accepted_seq ASC")
       .all() as { hub_seq: number; accepted_seq: number; bundle_hash: string; chain_prev_hash: string | null; chain_hash: string }[];
@@ -63,6 +75,7 @@ export class MaintenanceService {
 
   checkpoint(): void {
     this.db.pragma("wal_checkpoint(TRUNCATE)");
+    this.lastCheckpointAt = new Date().toISOString();
   }
 
   start(): void {

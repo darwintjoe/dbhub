@@ -1,6 +1,15 @@
-# DBHub v0
+# DBHub v0.3.0
 
 Standalone local sync hub for one company's devices. Windows service, HTTP LAN ingest, SQLite replica, verified local chain, read-only dashboard. No outbound network calls in v0.
+
+## Requirements
+
+- Cross-platform core: DBHub core runs on Windows and Linux. The installer is Windows-only in v0.3.x; Linux packaging is planned. See [docs/PLATFORM.md](docs/PLATFORM.md) for the Linux contract.
+- Node 22 LTS.
+- `better-sqlite3` native build tools when no prebuild is available (`python3`, `make`, `g++`).
+- `cloudflared` on `PATH` for tunnel mode.
+- UDP 5353 available for mDNS (coexists with Avahi on Linux).
+- Elevated (Administrator) shell for Windows install.
 
 ## Quick start (dev)
 
@@ -22,6 +31,7 @@ Admin token for dev example config can be `dev-admin-token` only if you set `adm
 - `config:init` — generate config + admin token
 - `simulate` — 3 devices / 300 bundles e2e simulator
 - `verify-chain <sqlitePath>` — offline local-chain verification
+- `admin-token-rotate` — recover admin token via `node scripts/admin-token-rotate.mjs`
 - `service:install|uninstall|start|stop|status` — Windows service control
 
 ## Layout

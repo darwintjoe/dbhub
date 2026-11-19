@@ -77,7 +77,7 @@ describe("migration v1 → v3 cleanup (P1)", () => {
           db, config, bundles, devices, new ManifestsRepo(db), new OutboxRepo(db), new AuditRepo(db),
         );
 
-        expect(db.pragma("user_version", { simple: true })).toBe(3);
+        expect(db.pragma("user_version", { simple: true })).toBe(5);
         expect(eventIds(db)).toEqual([]);
         expect(db.prepare("SELECT event_id, bundle_id FROM pending_event_ids").all()).toEqual([
           { event_id: "evt_a2", bundle_id: b2.bundleId },
@@ -105,7 +105,7 @@ describe("migration v1 → v3 cleanup (P1)", () => {
 
         const db2 = openDatabase(config);
         try {
-          expect(db2.pragma("user_version", { simple: true })).toBe(3);
+          expect(db2.pragma("user_version", { simple: true })).toBe(5);
           expect(eventIds(db2).length).toBe(before.events);
           expect((db2.prepare("SELECT COUNT(*) AS c FROM pending_event_ids").get() as { c: number }).c).toBe(before.reservations);
           expect(new BundlesRepo(db2).countByStatus("accepted")).toBe(before.accepted);
@@ -124,3 +124,5 @@ describe("migration v1 → v3 cleanup (P1)", () => {
     }
   });
 });
+
+

@@ -2,6 +2,7 @@
 import type { Config } from "../config";
 import type { BundlesRepo } from "../db/bundles.repo";
 import type { DevicesRepo } from "../db/devices.repo";
+import { VERSION } from "../domain/types";
 
 export function uiHandler(config: Config, bundles: BundlesRepo, devices: DevicesRepo) {
   return (_req: Request, res: Response) => {
@@ -39,8 +40,9 @@ th,td{padding:6px 8px;border-bottom:1px solid #eee;text-align:left;font-size:13p
 </style></head><body>
 <h1>DBHub <span class="badge">${esc(config.companyId)}</span></h1>
 <div class="card">
-<p>Version 0.2.0 | Uptime ${Math.floor(process.uptime())}s | Latest acceptedSeq ${latest ? (latest.acceptedSeq ?? 0) : 0} | Latest hubSeq (insertion order) ${insertionHead ? insertionHead.hubSeq : 0}</p>
+<p>Version ${VERSION} | Uptime ${Math.floor(process.uptime())}s | Latest acceptedSeq ${latest ? (latest.acceptedSeq ?? 0) : 0} | Latest hubSeq (insertion order) ${insertionHead ? insertionHead.hubSeq : 0}</p>
 <p>Devices: ${counts.devices} | Accepted: ${counts.accepted} | Pending parent: ${counts.pendingParent} | Quarantined: ${counts.quarantined} | Events: ${counts.events}</p>
+<p><a href="/admin">Admin</a></p>
 <p>Latest chain hash: ${esc(latest ? latest.chainHash : "none")}</p>
 </div>
 <div class="card">

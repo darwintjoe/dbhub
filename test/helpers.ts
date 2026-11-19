@@ -33,8 +33,13 @@ export function makeConfig(dataDir: string): Config {
     dataDir,
     logDir: path.join(dataDir, "logs"),
     storage: { target: "null", folderPath: "" },
-    limits: { maxBodyBytes: 5242880, ratePerMinutePerDevice: 1000, ratePerMinutePerIp: 1000 },
+    limits: { maxBodyBytes: 5242880, ratePerMinutePerDevice: 1000, ratePerMinutePerIp: 1000, ratePerMinutePerAdmin: 1000 },
     quarantine: { pendingParentTimeoutMs: 1000 },
+    publicUrl: "",
+    monitoring: { enabled: true, sampleIntervalMs: 5000, historyPoints: 120, hostCounters: true },
+    backup: { dir: "", retentionDays: 14, maxFiles: 20 },
+    security: { trustProxy: false, adminAllowedCidrs: [], allowedOrigins: [] },
+    connectivity: { mode: "lan", publicUrl: "", publicDomain: "hub.example.com", publicPort: 8788, cloudflare: { binaryPath: "cloudflared", tunnelTokenFile: "", autoStart: false }, mdns: { enabled: true } },
   };
 }
 
@@ -87,6 +92,14 @@ import { MaintenanceService } from "../src/services/maintenance";
 import { NullTarget } from "../src/services/replica/null-target";
 import { requireAdmin, requireDevice, requireDeviceOrAdmin } from "../src/http/auth";
 import { errorHandler } from "../src/http/errors";
+import { rateLimitMiddleware } from "../src/http/rate-limit";
+import { ConfigService } from "../src/services/config-service";
+import { MetricsSampler } from "../src/services/metrics/sampler";
+import { RequestMetrics } from "../src/services/metrics/registry";
+import { OverviewService } from "../src/services/overview";
+import { HealthService } from "../src/services/health";
+import { BackupService } from "../src/services/backup";
+import { adminExtraRoutes } from "../src/http/routes/admin-extra";
 import { statusHandler } from "../src/http/routes/status";
 import { devicesRoutes } from "../src/http/routes/devices";
 import { relayRoutes } from "../src/http/routes/relay";
@@ -100,31 +113,65 @@ export function makeApp(ctx: TestCtx) {
   const ingest = new IngestService(ctx.db, ctx.config, ctx.bundles, ctx.devices, ctx.manifests, ctx.outbox, ctx.audit);
   const batching = new BatchingService(ctx.db, ctx.bundles, ctx.manifests, ctx.outbox, new NullTarget(), ctx.config);
   const maintenance = new MaintenanceService(ctx.db, ctx.bundles, ctx.config);
+  const configPath = path.join(ctx.config.dataDir, "config.json");
+  try {
+    if (!fs.existsSync(configPath)) {
+      fs.mkdirSync(path.dirname(configPath), { recursive: true });
+      fs.writeFileSync(configPath, JSON.stringify(ctx.config, null, 2) + "\n");
+    }
+  } catch { /* ignore */ }
+  const configService = new ConfigService({ path: configPath, config: ctx.config, audit: ctx.audit });
+  const fakeHost = {
+    available: true,
+    async sample() { return { available: true, hostname: "test", platform: process.platform, release: "1", arch: "x64", cpuModel: "cpu", cpuCores: 1, cpuLogical: 1, cpuSpeedMhz: 1, loadAvg: [0], cpuPercentTotal: 1, cpuPercentPerCore: [1], memoryTotalBytes: 1000, memoryFreeBytes: 500, memoryUsedBytes: 500, swapTotalBytes: null, swapFreeBytes: null, uptimeSec: 1, disks: [{ mount: "/", totalBytes: 1000, freeBytes: 500, usedBytes: 500, usedPercent: 50 }], network: [], sampledAt: new Date().toISOString() }; },
+    async hardware() { return { available: true, cpu: { model: "cpu", cores: 1, logical: 1, speedMhz: 1 }, memoryModules: [], physicalDisks: [], logicalVolumes: [], nics: [], os: { caption: "test", version: "1" }, cachedAt: new Date().toISOString() }; },
+  };
+  const requestMetrics = new RequestMetrics();
+  const metricsSampler = new MetricsSampler({
+    config: ctx.config,
+    hostAdapter: fakeHost as any,
+    dbStatsProvider: () => ({ counts: { accepted: ctx.bundles.countByStatus("accepted") } }),
+    serviceStatsProvider: () => ({ health: "ok" }),
+    requestMetrics,
+    activeConnectionsProvider: () => 0,
+  });
+  const backupService = new BackupService(ctx.db, ctx.config);
+  const healthService = new HealthService({ config: ctx.config, db: ctx.db, bundles: ctx.bundles, outbox: ctx.outbox, serverListening: () => true, serviceStatsProvider: () => ({ batchingLastErrorAt: null, lastChainVerify: null }), onHealthStatus: () => {} });
+  const stubTunnel = {
+    getStatus: () => ({ status: "disabled", publicUrl: "", lastError: null, lastStartAt: null, restartCount: 0, pid: null }),
+  };
+  const overviewService = new OverviewService({ config: ctx.config, configService, healthService, bundles: ctx.bundles, devices: ctx.devices, outbox: ctx.outbox, metricsSampler, backupService, tunnel: stubTunnel as any, maintenance });
+
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: ctx.config.limits.maxBodyBytes }));
   app.use((req, res, next) => {
     if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH") {
       const ct = req.header("content-type") || "";
-      if (!ct.includes("application/json")) {
+      const cl = req.header("content-length");
+      const hasBody = cl !== undefined && cl !== "0";
+      const isRelay = req.path.startsWith("/api/v1/relay");
+      if (hasBody && !ct.includes("application/json") && (isRelay || req.path.startsWith("/api/v1/admin"))) {
         res.status(415).json({ error: { code: "BUNDLE-001", message: "Content-Type must be application/json.", details: {} } });
         return;
       }
     }
     next();
   });
-  app.get("/healthz", (_req, res) => res.json({ ok: true, version: "0.2.0" }));
+  app.use(rateLimitMiddleware(ctx.config));
+  app.get("/healthz", (_req, res) => res.json({ ok: true, version: "0.3.0" }));
   app.get("/", uiHandler(ctx.config, ctx.bundles, ctx.devices));
   app.get("/api/v1/status", requireDeviceOrAdmin(ctx.config, ctx.devices), statusHandler(ctx.config, ctx.bundles, ctx.devices));
   app.use("/api/v1/admin", requireAdmin(ctx.config));
-  app.use("/api/v1/admin/devices", devicesRoutes(ctx.config, ctx.devices, ctx.audit));
+  app.use("/api/v1/admin/devices", devicesRoutes(ctx.config, ctx.devices, ctx.audit, ctx.bundles));
   app.use("/api/v1/admin/quarantine", quarantineRoutes(ctx.bundles));
   app.use("/api/v1/admin/maintenance", maintenanceRoutes(maintenance, ctx.outbox));
+  app.use("/api/v1/admin", adminExtraRoutes({ config: ctx.config, configService, metricsSampler, overviewService, healthService, backupService, audit: ctx.audit, db: ctx.db, bundles: ctx.bundles, devices: ctx.devices, outbox: ctx.outbox, maintenance, logDir: ctx.config.logDir }));
   app.use("/api/v1/relay", requireDevice(ctx.devices), relayRoutes(ingest, ctx.devices));
   app.use("/api/v1/pull", requireDevice(ctx.devices), pullRoutes(ctx.bundles));
   app.use("/api/v1/manifest", requireDevice(ctx.devices), manifestRoutes(ctx.config, ctx.manifests));
   app.use(errorHandler);
-  return { app, batching, maintenance, ingest };
+  return { app, batching, maintenance, ingest, configService, metricsSampler };
 }
 
 export function makeBundle(deviceId: string, prev: string | null, seq = 1): BundleV1 {

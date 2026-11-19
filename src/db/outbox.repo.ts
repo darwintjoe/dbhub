@@ -126,6 +126,32 @@ export class OutboxRepo {
     return out;
   }
 
+  /** Age in ms of the oldest pending/uploading row, or null when none. */
+  oldestPendingAgeMs(): number | null {
+    try {
+      const row = this.db
+        .prepare("SELECT MIN(created_at) AS m FROM outbox WHERE status IN ('pending','uploading')")
+        .get() as { m: string | null };
+      if (!row?.m) return null;
+      const t = Date.parse(row.m);
+      return Number.isFinite(t) ? Math.max(0, Date.now() - t) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** ISO timestamp of the most recent successful (done) upload, or null. */
+  lastSuccessAt(): string | null {
+    try {
+      const row = this.db
+        .prepare("SELECT MAX(updated_at) AS m FROM outbox WHERE status='done'")
+        .get() as { m: string | null };
+      return row?.m ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   lastErrors(limit = 10): { bundleId: string; target: string; lastError: string | null }[] {
     const rows = this.db
       .prepare("SELECT bundle_id, target, last_error FROM outbox WHERE last_error IS NOT NULL ORDER BY id DESC LIMIT ?")

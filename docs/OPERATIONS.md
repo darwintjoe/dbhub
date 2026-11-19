@@ -3,7 +3,7 @@
 ## Requirements
 
 - Windows 10/11 x64
-- **Node.js 22 LTS in production** (v0.2.0 target). Node 24 dev host is supported for building/testing only.
+- **Node.js 22 LTS in production** (v0.3.0 target). Node 24 dev host is supported for building/testing only.
 - Elevated PowerShell for install/uninstall
 
 ## Install
@@ -114,7 +114,7 @@ Service auto-restart uses node-windows (`maxRestarts:10`, `wait:2`, `grow:0.25`)
 
 ## Acceptance record (2026-11-18)
 
-- Version: 0.2.0 (commit 02daeb0)
+- Version: 0.3.0 (commit 02daeb0)
 - Node.js: 22.23.5 (portable user-level install; production target met for verification)
 - npm: 10.9.9
 - Rename check: zero case-insensitive `fazai` matches in tracked/untracked project files (excluding node_modules, dist, .git)
@@ -122,7 +122,7 @@ Service auto-restart uses node-windows (`maxRestarts:10`, `wait:2`, `grow:0.25`)
 - Typecheck: `npx tsc -p tsconfig.json --noEmit` passed
 - Build: `npm run build` passed
 - Simulator: `npm run simulate` -> `SIMULATION PASSED` (accepted 300, quarantined 1, pulled/checked 300)
-- Service ID: `dbhub.exe`; display name: `DBHub`; state: `RUNNING`; `/healthz`: `{"ok":true,"version":"0.2.0"}`
+- Service ID: `dbhub.exe`; display name: `DBHub`; state: `RUNNING`; `/healthz`: `{"ok":true,"version":"0.3.0"}`
 - Recovery actions: restart at 5s/10s/30s, reset period 86400s; start type `AUTO_START`
 - Crash auto-restart: executed by stopping the listener PID with `Stop-Process -Force`; service recovered to `RUNNING`, `/healthz` passed, no outbox rows left in `uploading`
 - Graceful restart: `Restart-Service dbhub.exe` passed; clean startup logged; `wal_checkpoint(TRUNCATE)` returned `busy=0`
@@ -139,3 +139,17 @@ Service auto-restart uses node-windows (`maxRestarts:10`, `wait:2`, `grow:0.25`)
 - Bundle `signature` field reserved and ignored. No bundle signatures/authenticity yet.
 - No outbound network calls (no SaaS, S3/R2, Drive, tunnel, telemetry). Replica targets are local only (`null`, `folder`).
 - One company per hub instance. Multi-company/multi-hub not supported.
+## Appliance setup
+
+1. Install: `.\scripts\install.ps1` (elevated). Firewall opens TCP 8787 and UDP 5353.
+2. Discover via mDNS: `dbhub-<serial>.local` advertises `_dbhub._tcp` on the admin port.
+3. Generate/reset setup code: `npm run setup-code -- --data-dir <dataDir>`.
+4. Complete first-run setup at `http://<ip>:8787/admin/#/setup`.
+5. Pair devices with QR or short code from `/admin/#/connect`.
+
+## Cloudflare Tunnel
+
+- Set `connectivity.mode=cloudflare`, `connectivity.publicUrl`, and `connectivity.cloudflare.tunnelTokenFile`.
+- Ensure `cloudflared` is installed at `connectivity.cloudflare.binaryPath`.
+- Tunnel ingress: public hostname -> `http://127.0.0.1:8788`.
+- Admin is never exposed through the tunnel.
