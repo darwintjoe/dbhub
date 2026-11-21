@@ -16,6 +16,7 @@ import { BatchingService } from "./services/batching";
 import { MaintenanceService } from "./services/maintenance";
 import { NullTarget } from "./services/replica/null-target";
 import { FolderTarget } from "./services/replica/folder-target";
+import { createSequencerClient } from "./services/saas/sequencer-client";
 import { requireAdmin, requireDevice, requireDeviceOrAdmin } from "./http/auth";
 import { rateLimitMiddleware } from "./http/rate-limit";
 import { createErrorHandler } from "./http/errors";
@@ -98,7 +99,8 @@ async function main() {
       : new NullTarget();
 
   const ingest = new IngestService(db, config, bundles, devices, manifests, outbox, audit);
-  const batching = new BatchingService(db, bundles, manifests, outbox, target, config);
+  const sequencer = createSequencerClient(config.saas);
+  const batching = new BatchingService(db, bundles, manifests, outbox, target, config, 300_000, sequencer);
   const maintenance = new MaintenanceService(db, bundles, config);
 
   const configService = new ConfigService({ path: configPath, config, audit });

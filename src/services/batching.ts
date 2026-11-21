@@ -4,6 +4,7 @@ import type { BundlesRepo } from "../db/bundles.repo";
 import type { ManifestsRepo } from "../db/manifests.repo";
 import type { OutboxRepo } from "../db/outbox.repo";
 import type { ReplicaTarget } from "./replica/target";
+import type { SequencerClient } from "./saas/sequencer-client";
 
 export class BatchingService {
   private readonly db: Database.Database;
@@ -13,6 +14,7 @@ export class BatchingService {
   private readonly target: ReplicaTarget;
   private readonly config: Config;
   private readonly leaseMs: number;
+  private readonly sequencer: SequencerClient | null;
   private timer: NodeJS.Timeout | null = null;
   private running: Promise<void> | null = null;
   public lastRunAt: string | null = null;
@@ -26,6 +28,7 @@ export class BatchingService {
     target: ReplicaTarget,
     config: Config,
     leaseMs = 300_000,
+    sequencer: SequencerClient | null = null,
   ) {
     this.db = db;
     this.bundles = bundles;
@@ -34,6 +37,7 @@ export class BatchingService {
     this.target = target;
     this.config = config;
     this.leaseMs = leaseMs;
+    this.sequencer = sequencer;
   }
 
   /** Call once at startup before start(). */
@@ -76,6 +80,22 @@ export class BatchingService {
         const res = await this.target.uploadBundle(bundle);
         const manifest = this.manifests.get(this.config.replicaId);
         if (manifest) await this.target.uploadManifest(manifest);
+        if (this.sequencer) {
+          // Metadata only: bundle payload never leaves Hub (PRD §15.3).
+          const result = await this.sequencer.sequence({
+            bundleId: bundle.bundleId,
+            prevHash: bundle.chainPrevHash,
+            payloadHash: bundle.payloadHash,
+            driveUri: res.uri,
+            eventCount: bundle.eventCount,
+            deviceId: bundle.deviceId,
+            hubOrigin: this.config.saas?.hubOrigin ?? false,
+          });
+          this.db.prepare("UPDATE bundles SET global_bundle_id=? WHERE bundle_id=?").run(
+            result.globalSequenceNo,
+            bundle.bundleId,
+          );
+        }
         if (!this.outbox.claimIfStillLeased(row.id, leaseExpiresAt)) continue;
         const finishedAt = new Date().toISOString();
         this.outbox.update(row.id, "done", attempts, null, null, finishedAt);

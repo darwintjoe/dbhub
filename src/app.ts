@@ -231,7 +231,7 @@ export function createAdminApp(...args: any[]): any {
   }));
 
   const deviceAuth = requireDevice(ctx.devices);
-  app.use("/api/v1/relay", deviceAuth, scopeGuard(ctx.devices, "relay:write"), relayRoutes(ctx.ingest, ctx.devices));
+  app.use("/api/v1/relay", deviceAuth, scopeGuard(ctx.devices, "relay:write"), relayRoutes(ctx.ingest, ctx.devices, config));
   app.use("/api/v1/pull", deviceAuth, scopeGuard(ctx.devices, "pull:read"), pullRoutes(ctx.bundles));
   app.use("/api/v1/manifest", deviceAuth, scopeGuard(ctx.devices, "manifest:read"), manifestRoutes(config, ctx.manifests));
 
@@ -284,7 +284,7 @@ export function createPublicApp(...args: any[]): any {
   }));
 
   const deviceAuth = requireDevice(ctx.devices);
-  app.use("/api/v1/relay", deviceAuth, scopeGuard(ctx.devices, "relay:write"), relayRoutes(ctx.ingest, ctx.devices));
+  app.use("/api/v1/relay", deviceAuth, scopeGuard(ctx.devices, "relay:write"), relayRoutes(ctx.ingest, ctx.devices, config));
   app.use("/api/v1/pull", deviceAuth, scopeGuard(ctx.devices, "pull:read"), pullRoutes(ctx.bundles));
   app.use("/api/v1/manifest", deviceAuth, scopeGuard(ctx.devices, "manifest:read"), manifestRoutes(config, ctx.manifests));
 

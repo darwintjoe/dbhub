@@ -10,6 +10,14 @@ const storageSchema = z.object({
   adapter: z.enum(["null", "memory", "local-folder"]).default("null"),
 });
 
+const saasSchema = z.object({
+  baseUrl: z.string().default(""),
+  profile: z.enum(["solo", "hub_required"]).default("solo"),
+  hubOrigin: z.boolean().default(false),
+  deviceTokenFile: z.string().default(""),
+  timeoutMs: z.number().int().positive().default(10000),
+});
+
 const limitsSchema = z.object({
   maxBodyBytes: z.number().int().positive().default(5242880),
   ratePerMinutePerDevice: z.number().int().positive().default(120),
@@ -65,6 +73,7 @@ export const configSchema = z.object({
   logDir: z.string().min(1),
   publicUrl: z.string().default(""),
   storage: storageSchema.default({ target: "null", folderPath: "", adapter: "null" }),
+  saas: saasSchema.default({ baseUrl: "", profile: "solo", hubOrigin: false, deviceTokenFile: "", timeoutMs: 10000 }),
   limits: limitsSchema.default({
     maxBodyBytes: 5242880,
     ratePerMinutePerDevice: 120,
@@ -122,6 +131,7 @@ export function loadConfig(deps?: PathDeps): { config: Config; path: string } {
   if (!path.isAbsolute(config.logDir)) config.logDir = path.resolve(path.dirname(p), config.logDir);
   if (config.backup.dir && !path.isAbsolute(config.backup.dir)) config.backup.dir = path.resolve(path.dirname(p), config.backup.dir);
   if (config.storage.target === "folder" && config.storage.folderPath && !path.isAbsolute(config.storage.folderPath)) config.storage.folderPath = path.resolve(path.dirname(p), config.storage.folderPath);
+  if (config.saas.deviceTokenFile && !path.isAbsolute(config.saas.deviceTokenFile)) config.saas.deviceTokenFile = path.resolve(path.dirname(p), config.saas.deviceTokenFile);
   config.replicaId = sanitizeSerial(config.replicaId);
   return { config, path: p };
 }

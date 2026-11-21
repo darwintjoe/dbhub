@@ -32,7 +32,8 @@ export function makeConfig(dataDir: string): Config {
     adminTokenHash: sha256Hex("admin-token"),
     dataDir,
     logDir: path.join(dataDir, "logs"),
-    storage: { target: "null", folderPath: "" },
+    storage: { target: "null", folderPath: "", adapter: "null" },
+    saas: { baseUrl: "", profile: "solo", hubOrigin: false, deviceTokenFile: "", timeoutMs: 10000 },
     limits: { maxBodyBytes: 5242880, ratePerMinutePerDevice: 1000, ratePerMinutePerIp: 1000, ratePerMinutePerAdmin: 1000 },
     quarantine: { pendingParentTimeoutMs: 1000 },
     publicUrl: "",
@@ -167,7 +168,7 @@ export function makeApp(ctx: TestCtx) {
   app.use("/api/v1/admin/quarantine", quarantineRoutes(ctx.bundles));
   app.use("/api/v1/admin/maintenance", maintenanceRoutes(maintenance, ctx.outbox));
   app.use("/api/v1/admin", adminExtraRoutes({ config: ctx.config, configService, metricsSampler, overviewService, healthService, backupService, audit: ctx.audit, db: ctx.db, bundles: ctx.bundles, devices: ctx.devices, outbox: ctx.outbox, maintenance, logDir: ctx.config.logDir }));
-  app.use("/api/v1/relay", requireDevice(ctx.devices), relayRoutes(ingest, ctx.devices));
+  app.use("/api/v1/relay", requireDevice(ctx.devices), relayRoutes(ingest, ctx.devices, ctx.config));
   app.use("/api/v1/pull", requireDevice(ctx.devices), pullRoutes(ctx.bundles));
   app.use("/api/v1/manifest", requireDevice(ctx.devices), manifestRoutes(ctx.config, ctx.manifests));
   app.use(errorHandler);
