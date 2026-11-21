@@ -83,7 +83,14 @@ function ensureServices(ctx: any) {
   if (!ctx.maintenance) {
     ctx.maintenance = new MaintenanceService(ctx.db, ctx.bundles, ctx.config);
   }
-  if (!ctx.storageAdapter) ctx.storageAdapter = createStorageAdapter(ctx.config.storage);
+  if (!ctx.storageAdapter) {
+    ctx.storageAdapter = createStorageAdapter({
+      ...ctx.config.storage,
+      googleDrive: ctx.config.googleDrive,
+      companyId: ctx.config.companyId,
+      replicaId: ctx.config.replicaId,
+    });
+  }
   if (!ctx.recovery) {
     ctx.recovery = new RecoveryService(
       ctx.db, ctx.config, ctx.bundles, ctx.manifests, ctx.storageAdapter, ctx.maintenance,

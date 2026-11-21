@@ -29,6 +29,7 @@
     "better-sqlite3": "^12.6.0",
     "bonjour-service": "^1.4.4",
     "express": "^4.21.2",
+    "googleapis": "^190.0.0",
     "pino": "^9.5.0",
     "qrcode": "^1.5.4",
     "zod": "^3.24.1"

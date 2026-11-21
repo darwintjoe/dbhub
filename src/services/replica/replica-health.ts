@@ -2,7 +2,7 @@ import type { Config } from "../../config";
 import type { BundlesRepo } from "../../db/bundles.repo";
 import type { ManifestsRepo } from "../../db/manifests.repo";
 import type { ChainVerifyResult } from "../maintenance";
-import type { StorageAdapter } from "./storage-adapter";
+import type { PausableStorageAdapter, StorageAdapter } from "./storage-adapter";
 
 export type ReplicaHealthLevel = "GOOD" | "WARNING" | "CRITICAL";
 
@@ -70,6 +70,7 @@ export class ReplicaHealthService {
       reasons.push({ code, message });
     };
 
+    const drive = (adapter as Partial<PausableStorageAdapter> | null)?.driveStatus?.();
     const verify = chainVerify();
     if (verify && !verify.ok) {
       raise("CRITICAL", "SAFETY-CHECK", "Some saved records do not match their safety checks.");
@@ -100,10 +101,19 @@ export class ReplicaHealthService {
       }
     }
 
+    if (drive?.revoked) {
+      raise("CRITICAL", "SAFETY-RECONNECT", drive.message);
+    }
+
     if (bundles.countByStatus("quarantined") > 0) {
       raise("WARNING", "SAFETY-REVIEW", "A few records are waiting to be reviewed.");
     }
 
-    return { level, ...COPY[level], reasons, checkedAt: new Date().toISOString() };
+    const result: ReplicaHealth = { level, ...COPY[level], reasons, checkedAt: new Date().toISOString() };
+    if (drive?.revoked) {
+      result.message = drive.message;
+      result.action = drive.action;
+    }
+    return result;
   }
 }

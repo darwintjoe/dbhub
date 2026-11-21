@@ -9,6 +9,7 @@
   "publicUrl": "",
   "storage": { "target": "null", "folderPath": "", "adapter": "null" },
   "saas": { "baseUrl": "", "profile": "solo", "hubOrigin": false, "deviceTokenFile": "", "timeoutMs": 10000 },
+  "googleDrive": { "clientId": "", "tokenPath": "", "scopes": ["https://www.googleapis.com/auth/drive.file"] },
   "limits": { "maxBodyBytes": 5242880, "ratePerMinutePerDevice": 120, "ratePerMinutePerIp": 300, "ratePerMinutePerAdmin": 600 },
   "quarantine": { "pendingParentTimeoutMs": 86400000 },
   "monitoring": { "enabled": true, "sampleIntervalMs": 5000, "historyPoints": 120, "hostCounters": true },

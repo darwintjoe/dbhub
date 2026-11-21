@@ -62,6 +62,9 @@ export class BatchingService {
   }
 
   private async runOnce(now: string): Promise<void> {
+    // A revoked/paused storage adapter pauses sync entirely (PRD §13.3).
+    const pausable = this.target as { isPaused?: () => boolean };
+    if (pausable.isPaused?.() === true) return;
     this.lastRunAt = now;
     // Reclaim leases that expired because the previous process died mid-upload.
     this.outbox.resetExpiredLeases(now);

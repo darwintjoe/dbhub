@@ -22,6 +22,7 @@ import { OfflineNumberDelegationClient } from "./services/numbers/number-block-c
 import { createStorageAdapter } from "./services/replica/storage-adapter";
 import { RecoveryService } from "./services/replica/recovery";
 import { ReplicaHealthService } from "./services/replica/replica-health";
+import { StorageAdapterTarget } from "./services/replica/adapter-target";
 import { requireAdmin, requireDevice, requireDeviceOrAdmin } from "./http/auth";
 import { rateLimitMiddleware } from "./http/rate-limit";
 import { createErrorHandler } from "./http/errors";
@@ -98,16 +99,23 @@ async function main() {
   const outbox = new OutboxRepo(db);
   const audit = new AuditRepo(db);
 
+  const storageAdapter = createStorageAdapter({
+    ...config.storage,
+    googleDrive: config.googleDrive,
+    companyId: config.companyId,
+    replicaId: config.replicaId,
+  });
   const target =
-    config.storage.target === "folder"
-      ? new FolderTarget(config.storage.folderPath)
-      : new NullTarget();
+    config.storage.adapter === "google-drive"
+      ? new StorageAdapterTarget(storageAdapter)
+      : config.storage.target === "folder"
+        ? new FolderTarget(config.storage.folderPath)
+        : new NullTarget();
 
   const ingest = new IngestService(db, config, bundles, devices, manifests, outbox, audit);
   const sequencer = createSequencerClient(config.saas);
   const batching = new BatchingService(db, bundles, manifests, outbox, target, config, 300_000, sequencer);
   const maintenance = new MaintenanceService(db, bundles, config);
-  const storageAdapter = createStorageAdapter(config.storage);
   const recovery = new RecoveryService(db, config, bundles, manifests, storageAdapter, maintenance);
   const replicaHealth = new ReplicaHealthService({
     config,

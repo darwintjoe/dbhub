@@ -7,7 +7,15 @@ const storageSchema = z.object({
   target: z.enum(["null", "folder"]).default("null"),
   folderPath: z.string().default(""),
   // StorageAdapter seam (plan §4.4). "null" preserves legacy behavior.
-  adapter: z.enum(["null", "memory", "local-folder"]).default("null"),
+  adapter: z.enum(["null", "memory", "local-folder", "google-drive"]).default("null"),
+});
+
+const googleDriveSchema = z.object({
+  clientId: z.string().default(""),
+  tokenPath: z.string().default(""),
+  // drive.file only. Any other scope is rejected at config parse time.
+  scopes: z.array(z.literal("https://www.googleapis.com/auth/drive.file"))
+    .default(["https://www.googleapis.com/auth/drive.file"]),
 });
 
 const saasSchema = z.object({
@@ -74,6 +82,11 @@ export const configSchema = z.object({
   publicUrl: z.string().default(""),
   storage: storageSchema.default({ target: "null", folderPath: "", adapter: "null" }),
   saas: saasSchema.default({ baseUrl: "", profile: "solo", hubOrigin: false, deviceTokenFile: "", timeoutMs: 10000 }),
+  googleDrive: googleDriveSchema.default({
+    clientId: "",
+    tokenPath: "",
+    scopes: ["https://www.googleapis.com/auth/drive.file"],
+  }),
   limits: limitsSchema.default({
     maxBodyBytes: 5242880,
     ratePerMinutePerDevice: 120,
@@ -132,6 +145,7 @@ export function loadConfig(deps?: PathDeps): { config: Config; path: string } {
   if (config.backup.dir && !path.isAbsolute(config.backup.dir)) config.backup.dir = path.resolve(path.dirname(p), config.backup.dir);
   if (config.storage.target === "folder" && config.storage.folderPath && !path.isAbsolute(config.storage.folderPath)) config.storage.folderPath = path.resolve(path.dirname(p), config.storage.folderPath);
   if (config.saas.deviceTokenFile && !path.isAbsolute(config.saas.deviceTokenFile)) config.saas.deviceTokenFile = path.resolve(path.dirname(p), config.saas.deviceTokenFile);
+  if (config.googleDrive.tokenPath && !path.isAbsolute(config.googleDrive.tokenPath)) config.googleDrive.tokenPath = path.resolve(path.dirname(p), config.googleDrive.tokenPath);
   config.replicaId = sanitizeSerial(config.replicaId);
   return { config, path: p };
 }

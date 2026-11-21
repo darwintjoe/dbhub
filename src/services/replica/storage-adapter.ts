@@ -32,6 +32,18 @@ export interface StorageObjectRef {
   uri: string;
 }
 
+/** Optional capability for adapters that can pause sync (e.g. revoked OAuth). */
+export interface DriveStatus {
+  revoked: boolean;
+  message: string;
+  action: string;
+}
+
+export interface PausableStorageAdapter extends StorageAdapter {
+  isPaused(): boolean;
+  driveStatus(): DriveStatus;
+}
+
 /** Raised by every adapter when a requested object is absent. */
 export class StorageObjectNotFoundError extends Error {
   readonly code = "STORAGE_OBJECT_NOT_FOUND";
@@ -295,11 +307,14 @@ export class NullStorageAdapter implements StorageAdapter {
   }
 }
 
-export type StorageAdapterKind = "null" | "memory" | "local-folder";
+export type StorageAdapterKind = "null" | "memory" | "local-folder" | "google-drive";
 
 export interface StorageAdapterSettings {
-  adapter?: StorageAdapterKind;
-  folderPath?: string;
+  adapter?: StorageAdapterKind | undefined;
+  folderPath?: string | undefined;
+  googleDrive?: { clientId: string; tokenPath: string; scopes: string[] } | undefined;
+  companyId?: string | undefined;
+  replicaId?: string | undefined;
 }
 
 /**
@@ -312,6 +327,21 @@ export function createStorageAdapter(settings: StorageAdapterSettings): StorageA
       return new MemoryAdapter();
     case "local-folder":
       return new LocalFolderAdapter(settings.folderPath ?? "");
+    case "google-drive": {
+      // Lazy require keeps googleapis out of the default (memory/null/folder) path.
+      const mod = require("./google-drive-adapter") as typeof import("./google-drive-adapter");
+      const g = settings.googleDrive;
+      if (!g?.clientId || !g.tokenPath) {
+        throw new Error("Google Drive adapter requires clientId and tokenPath.");
+      }
+      return new mod.GoogleDriveAdapter({
+        clientId: g.clientId,
+        companyId: settings.companyId ?? "",
+        replicaId: settings.replicaId ?? "dbhub",
+        tokenStore: new mod.FileTokenStore(g.tokenPath),
+        scopes: g.scopes,
+      });
+    }
     case "null":
       return new NullStorageAdapter();
     default:

@@ -38,6 +38,7 @@ export function makeConfig(dataDir: string): Config {
     logDir: path.join(dataDir, "logs"),
     storage: { target: "null", folderPath: "", adapter: "null" },
     saas: { baseUrl: "", profile: "solo", hubOrigin: false, deviceTokenFile: "", timeoutMs: 10000 },
+    googleDrive: { clientId: "", tokenPath: "", scopes: ["https://www.googleapis.com/auth/drive.file"] },
     limits: { maxBodyBytes: 5242880, ratePerMinutePerDevice: 1000, ratePerMinutePerIp: 1000, ratePerMinutePerAdmin: 1000 },
     quarantine: { pendingParentTimeoutMs: 1000 },
     publicUrl: "",
@@ -125,7 +126,12 @@ export function makeApp(ctx: TestCtx) {
   const ingest = new IngestService(ctx.db, ctx.config, ctx.bundles, ctx.devices, ctx.manifests, ctx.outbox, ctx.audit);
   const batching = new BatchingService(ctx.db, ctx.bundles, ctx.manifests, ctx.outbox, new NullTarget(), ctx.config);
   const maintenance = new MaintenanceService(ctx.db, ctx.bundles, ctx.config);
-  const storageAdapter = ctx.storageAdapter ?? createStorageAdapter(ctx.config.storage);
+  const storageAdapter = ctx.storageAdapter ?? createStorageAdapter({
+    ...ctx.config.storage,
+    googleDrive: ctx.config.googleDrive,
+    companyId: ctx.config.companyId,
+    replicaId: ctx.config.replicaId,
+  });
   const recovery = ctx.recovery ?? new RecoveryService(
     ctx.db, ctx.config, ctx.bundles, ctx.manifests, storageAdapter, maintenance,
   );
