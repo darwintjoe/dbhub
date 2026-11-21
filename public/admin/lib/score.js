@@ -99,6 +99,12 @@ export function computeDataSafetyScore(snapshot) {
     add("quarantine", "Items to review", -penalty, 0, "warning", `${quarantined} item(s)`);
   }
 
+  // Replica health (PRD §29) caps the score so a broken safety posture cannot
+  // be hidden by otherwise healthy host metrics. All text is plain language.
+  const safety = (s.replica && s.replica.health) || s.dataSafety || null;
+  if (safety && safety.level === "CRITICAL") score = Math.min(score, 35);
+  else if (safety && safety.level === "WARNING") score = Math.min(score, 75);
+
   score = Math.max(0, Math.min(100, Math.round(score)));
 
   let label;

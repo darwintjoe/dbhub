@@ -19,8 +19,12 @@ import { statusHandler } from "./http/routes/status";
 import { devicesRoutes } from "./http/routes/devices";
 import { relayRoutes } from "./http/routes/relay";
 import { numberRoutes } from "./http/routes/numbers";
+import { recoveryRoutes } from "./http/routes/recovery";
 import { NumberRelayService } from "./services/numbers/number-relay";
 import { OfflineNumberDelegationClient } from "./services/numbers/number-block-client";
+import { createStorageAdapter } from "./services/replica/storage-adapter";
+import { RecoveryService } from "./services/replica/recovery";
+import { ReplicaHealthService } from "./services/replica/replica-health";
 import { pullRoutes } from "./http/routes/pull";
 import { manifestRoutes } from "./http/routes/manifest";
 import { quarantineRoutes } from "./http/routes/quarantine";
@@ -76,12 +80,27 @@ function ensureServices(ctx: any) {
   if (!ctx.ingest) {
     ctx.ingest = new IngestService(ctx.db, ctx.config, ctx.bundles, ctx.devices, ctx.manifests, ctx.outbox, ctx.audit);
   }
-  if (!ctx.numberRelay) {
-    const delegation = ctx.numberDelegation ?? new OfflineNumberDelegationClient();
-    ctx.numberRelay = new NumberRelayService(ctx.db, delegation);
-  }
   if (!ctx.maintenance) {
     ctx.maintenance = new MaintenanceService(ctx.db, ctx.bundles, ctx.config);
+  }
+  if (!ctx.storageAdapter) ctx.storageAdapter = createStorageAdapter(ctx.config.storage);
+  if (!ctx.recovery) {
+    ctx.recovery = new RecoveryService(
+      ctx.db, ctx.config, ctx.bundles, ctx.manifests, ctx.storageAdapter, ctx.maintenance,
+    );
+  }
+  if (!ctx.replicaHealth) {
+    ctx.replicaHealth = new ReplicaHealthService({
+      config: ctx.config,
+      bundles: ctx.bundles,
+      manifests: ctx.manifests,
+      adapter: ctx.storageAdapter,
+      chainVerify: () => ctx.maintenance.lastVerify,
+    });
+  }
+  if (!ctx.numberRelay) {
+    const delegation = ctx.numberDelegation ?? new OfflineNumberDelegationClient();
+    ctx.numberRelay = new NumberRelayService(ctx.db, delegation, 20, () => ctx.replicaHealth.check());
   }
   if (!ctx.tunnel) {
     ctx.tunnel = new CloudflareTunnelProvider({ config: ctx.config });
@@ -200,7 +219,7 @@ export function createAdminApp(...args: any[]): any {
     res.sendFile(targetFile);
   });
 
-  app.get("/api/v1/status", requireDeviceOrAdmin(config, ctx.devices), statusHandler(config, ctx.bundles, ctx.devices));
+  app.get("/api/v1/status", requireDeviceOrAdmin(config, ctx.devices), statusHandler(config, ctx.bundles, ctx.devices, () => ctx.replicaHealth.check()));
 
   // pairing admin routes
   app.use("/api/v1/admin/pairings", pairingsAdminRoutes({
@@ -214,6 +233,7 @@ export function createAdminApp(...args: any[]): any {
 
   app.use("/api/v1/admin/devices", devicesRoutes(config, ctx.devices, ctx.audit, ctx.bundles));
   app.use("/api/v1/admin/quarantine", quarantineRoutes(ctx.bundles));
+  app.use("/api/v1/admin/recovery", recoveryRoutes(ctx.recovery));
   app.use("/api/v1/admin/maintenance", maintenanceRoutes(ctx.maintenance, ctx.outbox));
   app.use("/api/v1/admin", adminExtraRoutes({
     config,

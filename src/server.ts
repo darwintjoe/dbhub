@@ -19,6 +19,9 @@ import { FolderTarget } from "./services/replica/folder-target";
 import { createSequencerClient } from "./services/saas/sequencer-client";
 import { NumberRelayService } from "./services/numbers/number-relay";
 import { OfflineNumberDelegationClient } from "./services/numbers/number-block-client";
+import { createStorageAdapter } from "./services/replica/storage-adapter";
+import { RecoveryService } from "./services/replica/recovery";
+import { ReplicaHealthService } from "./services/replica/replica-health";
 import { requireAdmin, requireDevice, requireDeviceOrAdmin } from "./http/auth";
 import { rateLimitMiddleware } from "./http/rate-limit";
 import { createErrorHandler } from "./http/errors";
@@ -103,8 +106,22 @@ async function main() {
   const ingest = new IngestService(db, config, bundles, devices, manifests, outbox, audit);
   const sequencer = createSequencerClient(config.saas);
   const batching = new BatchingService(db, bundles, manifests, outbox, target, config, 300_000, sequencer);
-  const numberRelay = new NumberRelayService(db, sequencer ?? new OfflineNumberDelegationClient());
   const maintenance = new MaintenanceService(db, bundles, config);
+  const storageAdapter = createStorageAdapter(config.storage);
+  const recovery = new RecoveryService(db, config, bundles, manifests, storageAdapter, maintenance);
+  const replicaHealth = new ReplicaHealthService({
+    config,
+    bundles,
+    manifests,
+    adapter: storageAdapter,
+    chainVerify: () => maintenance.lastVerify,
+  });
+  const numberRelay = new NumberRelayService(
+    db,
+    sequencer ?? new OfflineNumberDelegationClient(),
+    20,
+    () => replicaHealth.check(),
+  );
 
   const configService = new ConfigService({ path: configPath, config, audit });
   const serviceState = { healthStatus: "ok" };
@@ -172,7 +189,7 @@ async function main() {
   });
 
   const healthService = new HealthService({ config, db, bundles, outbox, serverListening: () => Boolean(serverRef?.listening), onHealthStatus: (s) => { serviceState.healthStatus = s; }, serviceStatsProvider: () => ({ batchingLastErrorAt: batching.lastErrorAt, lastChainVerify: maintenance.lastVerify }) });
-  const overviewService = new OverviewService({ config, configService, healthService, bundles, devices, outbox, metricsSampler, backupService, tunnel, maintenance });
+  const overviewService = new OverviewService({ config, configService, healthService, bundles, devices, outbox, metricsSampler, backupService, tunnel, maintenance, replicaHealthProvider: () => replicaHealth.check() });
 
   const mdns = new (await import("./services/mdns")).MdnsService({
     serial: config.replicaId,
@@ -196,6 +213,8 @@ async function main() {
     ingest,
     batching,
     numberRelay,
+    recovery,
+    replicaHealth,
     maintenance,
     metricsSampler,
     requestMetrics,

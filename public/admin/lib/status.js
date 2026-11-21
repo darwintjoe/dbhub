@@ -203,6 +203,12 @@ export function deriveAlerts(sample) {
   const quarantined = Number(s.counts?.quarantined ?? 0);
   if (quarantined > 0) add("warning", "QUARANTINE", `${quarantined} item(s) need review`);
 
+  const safety = (s.replica && s.replica.health) || s.dataSafety || null;
+  if (safety && safety.level && safety.level !== "GOOD") {
+    add(safety.level === "CRITICAL" ? "critical" : "warning", "SAFETY",
+      safety.message || "Some copies of your records are behind.");
+  }
+
   return alerts;
 }
 

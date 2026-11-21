@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { ReplicaHealth } from "../replica/replica-health";
 import { NumberRelayError } from "./errors";
 import type { DelegatedBlock, NumberDelegationClient, ReconcileRequest } from "./number-block-client";
 
@@ -42,7 +43,10 @@ export interface NumberIssueResult {
   blockId: string;
   idempotencyKey: string;
   issuedAt: string;
+  warning?: string | undefined;
 }
+
+export type ReplicaHealthProvider = () => ReplicaHealth | Promise<ReplicaHealth>;
 
 export interface BlockStatusView {
   blockId: string;
@@ -73,11 +77,18 @@ export class NumberRelayService {
   private readonly db: Database.Database;
   private readonly delegation: NumberDelegationClient;
   private readonly defaultBlockSize: number;
+  private readonly healthProvider?: ReplicaHealthProvider | undefined;
 
-  constructor(db: Database.Database, delegation: NumberDelegationClient, defaultBlockSize = 20) {
+  constructor(
+    db: Database.Database,
+    delegation: NumberDelegationClient,
+    defaultBlockSize = 20,
+    healthProvider?: ReplicaHealthProvider,
+  ) {
     this.db = db;
     this.delegation = delegation;
     this.defaultBlockSize = defaultBlockSize;
+    this.healthProvider = healthProvider;
   }
 
   private validate(docType: string, prefix: string): void {
@@ -172,6 +183,17 @@ export class NumberRelayService {
       };
     }
 
+    // PRD §29.4: CRITICAL health stops new number issuance; WARNING continues.
+    const health = this.healthProvider ? await this.healthProvider() : null;
+    if (health?.level === "CRITICAL") {
+      throw new NumberRelayError(
+        "NUM-009",
+        "New document numbers are paused until data safety is reviewed.",
+        503,
+      );
+    }
+    const warning = health?.level === "WARNING" ? health.message : undefined;
+
     let block = this.activeBlock(req.docType, req.prefix);
     if (!block) {
       try {
@@ -218,6 +240,7 @@ export class NumberRelayService {
       blockId: allocated.blockId,
       idempotencyKey: req.idempotencyKey,
       issuedAt: allocated.issuedAt,
+      warning,
     };
   }
 

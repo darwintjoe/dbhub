@@ -9,6 +9,7 @@ import type { HealthService } from "./health";
 import type { BackupService } from "./backup";
 import type { CloudflareTunnelProvider } from "./cloudflare-tunnel";
 import type { MaintenanceService } from "./maintenance";
+import type { ReplicaHealth } from "./replica/replica-health";
 
 export interface OverviewDeps {
   config: Config;
@@ -21,6 +22,7 @@ export interface OverviewDeps {
   backupService?: BackupService;
   tunnel?: CloudflareTunnelProvider;
   maintenance?: MaintenanceService;
+  replicaHealthProvider?: () => ReplicaHealth | Promise<ReplicaHealth>;
   db?: any;
 }
 
@@ -36,7 +38,7 @@ export class OverviewService {
   async getOverview() {
     const {
       config, configService, healthService, bundles, devices, outbox,
-      metricsSampler, backupService, tunnel, maintenance,
+      metricsSampler, backupService, tunnel, maintenance, replicaHealthProvider,
     } = this.deps;
     const snapshot = await metricsSampler.sample();
     const latest = bundles.acceptedHead();
@@ -125,6 +127,7 @@ export class OverviewService {
         latestAcceptedSeq: latest ? (latest.acceptedSeq ?? 0) : 0,
       },
       numberRelay: { active: false, detail: "Not implemented" },
+      health: replicaHealthProvider ? await replicaHealthProvider() : null,
       monitored: 1,
       total: 4,
     };

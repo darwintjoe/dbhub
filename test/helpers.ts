@@ -21,6 +21,9 @@ export interface TestCtx {
   outbox: OutboxRepo;
   audit: AuditRepo;
   numberDelegation?: import("../src/services/numbers/number-block-client").NumberDelegationClient;
+  storageAdapter?: import("../src/services/replica/storage-adapter").StorageAdapter;
+  recovery?: RecoveryService;
+  replicaHealth?: ReplicaHealthService;
   cleanup: () => void;
 }
 
@@ -106,8 +109,12 @@ import { statusHandler } from "../src/http/routes/status";
 import { devicesRoutes } from "../src/http/routes/devices";
 import { relayRoutes } from "../src/http/routes/relay";
 import { numberRoutes } from "../src/http/routes/numbers";
+import { recoveryRoutes } from "../src/http/routes/recovery";
 import { NumberRelayService } from "../src/services/numbers/number-relay";
 import { OfflineNumberDelegationClient } from "../src/services/numbers/number-block-client";
+import { createStorageAdapter } from "../src/services/replica/storage-adapter";
+import { RecoveryService } from "../src/services/replica/recovery";
+import { ReplicaHealthService } from "../src/services/replica/replica-health";
 import { pullRoutes } from "../src/http/routes/pull";
 import { manifestRoutes } from "../src/http/routes/manifest";
 import { quarantineRoutes } from "../src/http/routes/quarantine";
@@ -117,8 +124,24 @@ import { uiHandler } from "../src/http/ui";
 export function makeApp(ctx: TestCtx) {
   const ingest = new IngestService(ctx.db, ctx.config, ctx.bundles, ctx.devices, ctx.manifests, ctx.outbox, ctx.audit);
   const batching = new BatchingService(ctx.db, ctx.bundles, ctx.manifests, ctx.outbox, new NullTarget(), ctx.config);
-  const numberRelay = new NumberRelayService(ctx.db, ctx.numberDelegation ?? new OfflineNumberDelegationClient());
   const maintenance = new MaintenanceService(ctx.db, ctx.bundles, ctx.config);
+  const storageAdapter = ctx.storageAdapter ?? createStorageAdapter(ctx.config.storage);
+  const recovery = ctx.recovery ?? new RecoveryService(
+    ctx.db, ctx.config, ctx.bundles, ctx.manifests, storageAdapter, maintenance,
+  );
+  const replicaHealth = ctx.replicaHealth ?? new ReplicaHealthService({
+    config: ctx.config,
+    bundles: ctx.bundles,
+    manifests: ctx.manifests,
+    adapter: storageAdapter,
+    chainVerify: () => maintenance.lastVerify,
+  });
+  const numberRelay = new NumberRelayService(
+    ctx.db,
+    ctx.numberDelegation ?? new OfflineNumberDelegationClient(),
+    20,
+    () => replicaHealth.check(),
+  );
   const configPath = path.join(ctx.config.dataDir, "config.json");
   try {
     if (!fs.existsSync(configPath)) {
@@ -146,7 +169,7 @@ export function makeApp(ctx: TestCtx) {
   const stubTunnel = {
     getStatus: () => ({ status: "disabled", publicUrl: "", lastError: null, lastStartAt: null, restartCount: 0, pid: null }),
   };
-  const overviewService = new OverviewService({ config: ctx.config, configService, healthService, bundles: ctx.bundles, devices: ctx.devices, outbox: ctx.outbox, metricsSampler, backupService, tunnel: stubTunnel as any, maintenance });
+  const overviewService = new OverviewService({ config: ctx.config, configService, healthService, bundles: ctx.bundles, devices: ctx.devices, outbox: ctx.outbox, metricsSampler, backupService, tunnel: stubTunnel as any, maintenance, replicaHealthProvider: () => replicaHealth.check() });
 
   const app = express();
   app.disable("x-powered-by");
@@ -167,10 +190,11 @@ export function makeApp(ctx: TestCtx) {
   app.use(rateLimitMiddleware(ctx.config));
   app.get("/healthz", (_req, res) => res.json({ ok: true, version: "0.3.0" }));
   app.get("/", uiHandler(ctx.config, ctx.bundles, ctx.devices));
-  app.get("/api/v1/status", requireDeviceOrAdmin(ctx.config, ctx.devices), statusHandler(ctx.config, ctx.bundles, ctx.devices));
+  app.get("/api/v1/status", requireDeviceOrAdmin(ctx.config, ctx.devices), statusHandler(ctx.config, ctx.bundles, ctx.devices, () => replicaHealth.check()));
   app.use("/api/v1/admin", requireAdmin(ctx.config));
   app.use("/api/v1/admin/devices", devicesRoutes(ctx.config, ctx.devices, ctx.audit, ctx.bundles));
   app.use("/api/v1/admin/quarantine", quarantineRoutes(ctx.bundles));
+  app.use("/api/v1/admin/recovery", recoveryRoutes(recovery));
   app.use("/api/v1/admin/maintenance", maintenanceRoutes(maintenance, ctx.outbox));
   app.use("/api/v1/admin", adminExtraRoutes({ config: ctx.config, configService, metricsSampler, overviewService, healthService, backupService, audit: ctx.audit, db: ctx.db, bundles: ctx.bundles, devices: ctx.devices, outbox: ctx.outbox, maintenance, logDir: ctx.config.logDir }));
   app.use("/api/v1/relay", requireDevice(ctx.devices), relayRoutes(ingest, ctx.devices));
@@ -178,7 +202,7 @@ export function makeApp(ctx: TestCtx) {
   app.use("/api/v1/pull", requireDevice(ctx.devices), pullRoutes(ctx.bundles));
   app.use("/api/v1/manifest", requireDevice(ctx.devices), manifestRoutes(ctx.config, ctx.manifests));
   app.use(errorHandler);
-  return { app, batching, numberRelay, maintenance, ingest, configService, metricsSampler };
+  return { app, batching, numberRelay, recovery, replicaHealth, maintenance, ingest, configService, metricsSampler };
 }
 
 export function makeBundle(deviceId: string, prev: string | null, seq = 1): BundleV1 {
