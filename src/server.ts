@@ -17,6 +17,8 @@ import { MaintenanceService } from "./services/maintenance";
 import { NullTarget } from "./services/replica/null-target";
 import { FolderTarget } from "./services/replica/folder-target";
 import { createSequencerClient } from "./services/saas/sequencer-client";
+import { NumberRelayService } from "./services/numbers/number-relay";
+import { OfflineNumberDelegationClient } from "./services/numbers/number-block-client";
 import { requireAdmin, requireDevice, requireDeviceOrAdmin } from "./http/auth";
 import { rateLimitMiddleware } from "./http/rate-limit";
 import { createErrorHandler } from "./http/errors";
@@ -101,6 +103,7 @@ async function main() {
   const ingest = new IngestService(db, config, bundles, devices, manifests, outbox, audit);
   const sequencer = createSequencerClient(config.saas);
   const batching = new BatchingService(db, bundles, manifests, outbox, target, config, 300_000, sequencer);
+  const numberRelay = new NumberRelayService(db, sequencer ?? new OfflineNumberDelegationClient());
   const maintenance = new MaintenanceService(db, bundles, config);
 
   const configService = new ConfigService({ path: configPath, config, audit });
@@ -192,6 +195,7 @@ async function main() {
     configService,
     ingest,
     batching,
+    numberRelay,
     maintenance,
     metricsSampler,
     requestMetrics,

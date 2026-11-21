@@ -20,6 +20,7 @@ export interface TestCtx {
   manifests: ManifestsRepo;
   outbox: OutboxRepo;
   audit: AuditRepo;
+  numberDelegation?: import("../src/services/numbers/number-block-client").NumberDelegationClient;
   cleanup: () => void;
 }
 
@@ -104,6 +105,9 @@ import { adminExtraRoutes } from "../src/http/routes/admin-extra";
 import { statusHandler } from "../src/http/routes/status";
 import { devicesRoutes } from "../src/http/routes/devices";
 import { relayRoutes } from "../src/http/routes/relay";
+import { numberRoutes } from "../src/http/routes/numbers";
+import { NumberRelayService } from "../src/services/numbers/number-relay";
+import { OfflineNumberDelegationClient } from "../src/services/numbers/number-block-client";
 import { pullRoutes } from "../src/http/routes/pull";
 import { manifestRoutes } from "../src/http/routes/manifest";
 import { quarantineRoutes } from "../src/http/routes/quarantine";
@@ -113,6 +117,7 @@ import { uiHandler } from "../src/http/ui";
 export function makeApp(ctx: TestCtx) {
   const ingest = new IngestService(ctx.db, ctx.config, ctx.bundles, ctx.devices, ctx.manifests, ctx.outbox, ctx.audit);
   const batching = new BatchingService(ctx.db, ctx.bundles, ctx.manifests, ctx.outbox, new NullTarget(), ctx.config);
+  const numberRelay = new NumberRelayService(ctx.db, ctx.numberDelegation ?? new OfflineNumberDelegationClient());
   const maintenance = new MaintenanceService(ctx.db, ctx.bundles, ctx.config);
   const configPath = path.join(ctx.config.dataDir, "config.json");
   try {
@@ -168,11 +173,12 @@ export function makeApp(ctx: TestCtx) {
   app.use("/api/v1/admin/quarantine", quarantineRoutes(ctx.bundles));
   app.use("/api/v1/admin/maintenance", maintenanceRoutes(maintenance, ctx.outbox));
   app.use("/api/v1/admin", adminExtraRoutes({ config: ctx.config, configService, metricsSampler, overviewService, healthService, backupService, audit: ctx.audit, db: ctx.db, bundles: ctx.bundles, devices: ctx.devices, outbox: ctx.outbox, maintenance, logDir: ctx.config.logDir }));
-  app.use("/api/v1/relay", requireDevice(ctx.devices), relayRoutes(ingest, ctx.devices, ctx.config));
+  app.use("/api/v1/relay", requireDevice(ctx.devices), relayRoutes(ingest, ctx.devices));
+  app.use("/api/v1/numbers", requireDevice(ctx.devices), numberRoutes(numberRelay));
   app.use("/api/v1/pull", requireDevice(ctx.devices), pullRoutes(ctx.bundles));
   app.use("/api/v1/manifest", requireDevice(ctx.devices), manifestRoutes(ctx.config, ctx.manifests));
   app.use(errorHandler);
-  return { app, batching, maintenance, ingest, configService, metricsSampler };
+  return { app, batching, numberRelay, maintenance, ingest, configService, metricsSampler };
 }
 
 export function makeBundle(deviceId: string, prev: string | null, seq = 1): BundleV1 {

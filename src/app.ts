@@ -18,6 +18,9 @@ import { createErrorHandler } from "./http/errors";
 import { statusHandler } from "./http/routes/status";
 import { devicesRoutes } from "./http/routes/devices";
 import { relayRoutes } from "./http/routes/relay";
+import { numberRoutes } from "./http/routes/numbers";
+import { NumberRelayService } from "./services/numbers/number-relay";
+import { OfflineNumberDelegationClient } from "./services/numbers/number-block-client";
 import { pullRoutes } from "./http/routes/pull";
 import { manifestRoutes } from "./http/routes/manifest";
 import { quarantineRoutes } from "./http/routes/quarantine";
@@ -72,6 +75,10 @@ function ensureServices(ctx: any) {
   }
   if (!ctx.ingest) {
     ctx.ingest = new IngestService(ctx.db, ctx.config, ctx.bundles, ctx.devices, ctx.manifests, ctx.outbox, ctx.audit);
+  }
+  if (!ctx.numberRelay) {
+    const delegation = ctx.numberDelegation ?? new OfflineNumberDelegationClient();
+    ctx.numberRelay = new NumberRelayService(ctx.db, delegation);
   }
   if (!ctx.maintenance) {
     ctx.maintenance = new MaintenanceService(ctx.db, ctx.bundles, ctx.config);
@@ -231,7 +238,8 @@ export function createAdminApp(...args: any[]): any {
   }));
 
   const deviceAuth = requireDevice(ctx.devices);
-  app.use("/api/v1/relay", deviceAuth, scopeGuard(ctx.devices, "relay:write"), relayRoutes(ctx.ingest, ctx.devices, config));
+  app.use("/api/v1/relay", deviceAuth, scopeGuard(ctx.devices, "relay:write"), relayRoutes(ctx.ingest, ctx.devices));
+  app.use("/api/v1/numbers", deviceAuth, numberRoutes(ctx.numberRelay));
   app.use("/api/v1/pull", deviceAuth, scopeGuard(ctx.devices, "pull:read"), pullRoutes(ctx.bundles));
   app.use("/api/v1/manifest", deviceAuth, scopeGuard(ctx.devices, "manifest:read"), manifestRoutes(config, ctx.manifests));
 
@@ -284,7 +292,8 @@ export function createPublicApp(...args: any[]): any {
   }));
 
   const deviceAuth = requireDevice(ctx.devices);
-  app.use("/api/v1/relay", deviceAuth, scopeGuard(ctx.devices, "relay:write"), relayRoutes(ctx.ingest, ctx.devices, config));
+  app.use("/api/v1/relay", deviceAuth, scopeGuard(ctx.devices, "relay:write"), relayRoutes(ctx.ingest, ctx.devices));
+  app.use("/api/v1/numbers", deviceAuth, numberRoutes(ctx.numberRelay));
   app.use("/api/v1/pull", deviceAuth, scopeGuard(ctx.devices, "pull:read"), pullRoutes(ctx.bundles));
   app.use("/api/v1/manifest", deviceAuth, scopeGuard(ctx.devices, "manifest:read"), manifestRoutes(config, ctx.manifests));
 

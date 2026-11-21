@@ -145,7 +145,7 @@ describe("Profile B enforcement", () => {
     expect(() => assertHubOriginAllowed("solo", false)).not.toThrow();
   });
 
-  it("relay rejects uploads without hub origin in hub_required mode", async () => {
+  it("hub_required relay accepts any authenticated device upload", async () => {
     const ctx = makeCtx();
     try {
       ctx.config.saas.profile = "hub_required";
@@ -155,8 +155,8 @@ describe("Profile B enforcement", () => {
         .post("/api/v1/relay/bundles")
         .set("Authorization", "Bearer dev-token")
         .send(makeBundle(d.id, null));
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe("SAAS-003");
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("accepted");
     } finally {
       ctx.cleanup();
     }

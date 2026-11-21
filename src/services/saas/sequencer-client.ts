@@ -1,5 +1,11 @@
 import fs from "node:fs/promises";
 import { tokenHash } from "../../domain/hashing";
+import type {
+  BlockIssueRequest,
+  DelegatedBlock,
+  NumberDelegationClient,
+  ReconcileRequest,
+} from "../numbers/number-block-client";
 
 /**
  * SaaS sequencer client (PRD §15.3 correction, plan §4.2).
@@ -31,6 +37,9 @@ export interface SequencerClient {
   readonly name: string;
   sequence(metadata: SequenceMetadata): Promise<SequenceResult>;
 }
+
+/** Same machine-token client serves sequencing and delegated numbers. */
+export type SaasClient = SequencerClient & NumberDelegationClient;
 
 export class SaasSequencingError extends Error {
   readonly code: string;
@@ -122,7 +131,7 @@ function parseResult(data: unknown): SequenceResult {
   return { globalSequenceNo: seq, globalBundleHash: hash, sequencedAt: at };
 }
 
-export class HttpSequencerClient implements SequencerClient {
+export class HttpSequencerClient implements SequencerClient, NumberDelegationClient {
   readonly name = "saas-http";
   private readonly baseUrl: string;
   private readonly profile: SaasProfile;
@@ -181,6 +190,58 @@ export class HttpSequencerClient implements SequencerClient {
     }
     return parseResult(data);
   }
+
+  private async request<T>(method: "GET" | "POST", resource: string, body?: unknown): Promise<T> {
+    if (!this.baseUrl) throw new SaasSequencingError("SAAS-001", "saas.baseUrl not configured.");
+    const token = await this.tokens.getToken();
+    let res: Awaited<ReturnType<typeof fetch>>;
+    try {
+      res = await fetch(`${this.baseUrl}${resource}`, {
+        method,
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (e) {
+      throw new SaasSequencingError("SAAS-002", `SaaS request failed: ${(e as Error).message}`);
+    }
+    if (!res.ok) throw new SaasSequencingError("SAAS-002", `SaaS request rejected: HTTP ${res.status}`);
+    try {
+      return (await res.json()) as T;
+    } catch {
+      throw new SaasSequencingError("SAAS-004", "Invalid SaaS response.");
+    }
+  }
+
+  /** Delegated-number interface backed by the same SaaS machine-token client. */
+  async issueBlock(req: BlockIssueRequest): Promise<DelegatedBlock> {
+    return this.request<DelegatedBlock>("POST", "/numbers/block", {
+      doc_type: req.docType,
+      prefix: req.prefix,
+      size: req.size,
+      device_id: req.deviceId,
+    });
+  }
+
+  async blockStatus(blockId: string): Promise<DelegatedBlock | null> {
+    try {
+      return await this.request<DelegatedBlock>("GET", `/numbers/block/${encodeURIComponent(blockId)}`);
+    } catch (e) {
+      if (e instanceof SaasSequencingError && e.code === "SAAS-002") return null;
+      throw e;
+    }
+  }
+
+  async reconcile(req: ReconcileRequest): Promise<void> {
+    await this.request("POST", "/numbers/reconcile", {
+      block_id: req.blockId,
+      consumed: req.consumed,
+      voided: req.voided,
+    });
+  }
 }
 
 /** Used when no SaaS base URL is configured: keeps existing behavior intact. */
@@ -207,7 +268,7 @@ export interface SequencerSettings {
 export function createSequencerClient(
   settings: SequencerSettings,
   tokens?: DeviceTokenProvider,
-): SequencerClient | null {
+): SaasClient | null {
   if (!settings.baseUrl) return null;
   const provider =
     tokens ??

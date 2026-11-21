@@ -274,6 +274,37 @@ CREATE TABLE IF NOT EXISTS pairing_sessions (
       db.prepare("DELETE FROM app_state WHERE key LIKE 'pairing.%.qrPayload'").run();
     },
   },
+  {
+    version: 6,
+    // Hub-side number relay state. The v1 number_blocks table holds delegated
+    // ranges; this adds the per-number ledger and quota columns.
+    sql: `
+CREATE TABLE IF NOT EXISTS issued_numbers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_type TEXT NOT NULL,
+  prefix TEXT NOT NULL,
+  number INTEGER NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  block_id TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'issued',
+  issued_at TEXT NOT NULL,
+  reconciled_at TEXT,
+  UNIQUE(doc_type, prefix, number),
+  UNIQUE(idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_issued_numbers_block ON issued_numbers(block_id);
+`,
+    up: (db) => {
+      const cols = (db.pragma("table_info(number_blocks)") as { name: string }[]).map((c) => c.name);
+      if (!cols.includes("quota_limit")) {
+        db.exec("ALTER TABLE number_blocks ADD COLUMN quota_limit INTEGER NOT NULL DEFAULT 0");
+      }
+      if (!cols.includes("quota_used")) {
+        db.exec("ALTER TABLE number_blocks ADD COLUMN quota_used INTEGER NOT NULL DEFAULT 0");
+      }
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

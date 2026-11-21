@@ -7,6 +7,7 @@ import { OutboxRepo } from "../src/db/outbox.repo";
 import { AuditRepo } from "../src/db/audit.repo";
 import { IngestService } from "../src/services/ingest";
 import { MaintenanceService } from "../src/services/maintenance";
+import { latestMigrationVersion } from "../src/db/migrations";
 import { bundleHashFromBundle, payloadHash, sha256Hex } from "../src/domain/hashing";
 import { makeBundle } from "./helpers";
 import { createV1Fixture, deviceRow } from "./helpers/v1-fixture";
@@ -77,7 +78,7 @@ describe("migration v1 → v3 cleanup (P1)", () => {
           db, config, bundles, devices, new ManifestsRepo(db), new OutboxRepo(db), new AuditRepo(db),
         );
 
-        expect(db.pragma("user_version", { simple: true })).toBe(5);
+        expect(db.pragma("user_version", { simple: true })).toBe(latestMigrationVersion());
         expect(eventIds(db)).toEqual([]);
         expect(db.prepare("SELECT event_id, bundle_id FROM pending_event_ids").all()).toEqual([
           { event_id: "evt_a2", bundle_id: b2.bundleId },
@@ -105,7 +106,7 @@ describe("migration v1 → v3 cleanup (P1)", () => {
 
         const db2 = openDatabase(config);
         try {
-          expect(db2.pragma("user_version", { simple: true })).toBe(5);
+          expect(db2.pragma("user_version", { simple: true })).toBe(latestMigrationVersion());
           expect(eventIds(db2).length).toBe(before.events);
           expect((db2.prepare("SELECT COUNT(*) AS c FROM pending_event_ids").get() as { c: number }).c).toBe(before.reservations);
           expect(new BundlesRepo(db2).countByStatus("accepted")).toBe(before.accepted);
