@@ -7,7 +7,7 @@
   "dataDir": "./data",
   "logDir": "./logs",
   "publicUrl": "",
-  "storage": { "target": "null", "folderPath": "" },
+  "storage": { "target": "null", "folderPath": "", "adapter": "null" },
   "limits": { "maxBodyBytes": 5242880, "ratePerMinutePerDevice": 120, "ratePerMinutePerIp": 300, "ratePerMinutePerAdmin": 600 },
   "quarantine": { "pendingParentTimeoutMs": 86400000 },
   "monitoring": { "enabled": true, "sampleIntervalMs": 5000, "historyPoints": 120, "hostCounters": true },

@@ -6,6 +6,8 @@ import { configCandidates, resolvePath, type PathDeps } from "./platform/paths";
 const storageSchema = z.object({
   target: z.enum(["null", "folder"]).default("null"),
   folderPath: z.string().default(""),
+  // StorageAdapter seam (plan §4.4). "null" preserves legacy behavior.
+  adapter: z.enum(["null", "memory", "local-folder"]).default("null"),
 });
 
 const limitsSchema = z.object({
@@ -62,7 +64,7 @@ export const configSchema = z.object({
   dataDir: z.string().min(1),
   logDir: z.string().min(1),
   publicUrl: z.string().default(""),
-  storage: storageSchema.default({ target: "null", folderPath: "" }),
+  storage: storageSchema.default({ target: "null", folderPath: "", adapter: "null" }),
   limits: limitsSchema.default({
     maxBodyBytes: 5242880,
     ratePerMinutePerDevice: 120,
