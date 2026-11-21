@@ -60,3 +60,15 @@ Windows equivalents (unchanged, from `src/platform/paths.ts`): config `%PROGRAMD
 - No systemd unit file committed.
 - No firewall automation on Linux (no ufw/firewalld changes).
 - No change to the Windows install, its paths, or its service registration.
+- No Linux service start/stop or journal verification has been executed; Linux is dev-only at HEAD `d84feb6`.
+
+## Configuration and secret files (current)
+
+- Core is portable: no `sc.exe`, `powershell`, `netsh`, or backslash paths in `src/`. OS-specific code stays in the existing allowed adapters.
+- Opt-in secrets live outside SQLite: `saas.deviceTokenFile` and `googleDrive.tokenPath` (both resolved relative to the config file). Both must be mode `0600` on POSIX.
+- `googleDrive.scopes` accepts only `https://www.googleapis.com/auth/drive.file`; any other scope is rejected at config parse time.
+- `storage.adapter` selects `null` (default), `memory`, `local-folder`, or `google-drive`. Google Drive is opt-in and tested against a fake API only; no token is committed.
+
+## Verification at this HEAD
+
+`npm test` 198/198, `npm run build` pass, `npm run simulate` `SIMULATION PASSED` (`verify checked=300`), `npm audit --omit=dev` 0 vulnerabilities. None of these require a Linux service.

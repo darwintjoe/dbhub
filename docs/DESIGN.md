@@ -31,9 +31,9 @@ The `:` separator is required by the local chain format. The first bundle has no
 
 - `hub_seq` is insertion/audit order (`INTEGER PRIMARY KEY AUTOINCREMENT`). It is assigned when the row is first stored, including pending/quarantined rows. It is **not** chain order and not pull order.
 - `accepted_seq` is assigned **at acceptance time**, in the same transaction, from `COALESCE(MAX(accepted_seq),0)+1`. It is contiguous, unique for accepted rows, and never changes. It is the local chain order and the `/pull` cursor.
-- `global_bundle_id` is reserved (`@reserved`) and stays `NULL` in v0. A future SaaS sequencing service assigns final global order.
+- `global_bundle_id` receives the SaaS global sequence when a sequencer client is configured; it stays `NULL` in default local-only mode. The sequencer receives metadata only, never payload.
 
-Why immutable: v0.1.0 rebuilt `chain_hash` for historical rows during out-of-order resolution. Those hashes had already been exported by `FolderTarget`, so replicas silently diverged. From v0.1.1 onward, `accepted_seq` and `chain_prev_hash`/`chain_hash` are written once and never rewritten. A storage abstraction layer (SAL) may later map `accepted_seq -> global_bundle_id`.
+Why immutable: v0.1.0 rebuilt `chain_hash` for historical rows during out-of-order resolution. Those hashes had already been exported by `FolderTarget`, so replicas silently diverged. From v0.1.1 onward, `accepted_seq` and `chain_prev_hash`/`chain_hash` are written once and never rewritten. The B1 StorageAdapter seam now maps stored objects across adapters; `accepted_seq` is the local order and `global_bundle_id` the SaaS order.
 
 ## Per-device chain vs hub chain
 
@@ -67,7 +67,7 @@ Pending/quarantined bundles are never returned by `/pull`. `/status` counts even
 
 ## Outbox, leases and replica targets
 
-Each accepted bundle creates one outbox row per configured target (`null` or `folder` in v0). The batching loop runs every 2s, takes up to 20 due pending rows, and calls `ReplicaTarget.uploadBundle` then `uploadManifest`.
+Each accepted bundle creates one outbox row per configured target (`null`, `folder`, or opt-in `google-drive`). The batching loop runs every 2s, takes up to 20 due pending rows, and calls `ReplicaTarget.uploadBundle` then `uploadManifest`. When `storage.adapter=google-drive`, a `StorageAdapterTarget` bridge serializes the `StoredBundle` into bytes and calls the B1 `StorageAdapter`; legacy null/folder targets are unchanged.
 
 - Claim is synchronous: `status='uploading'`, `lease_expires_at = now + 5 min`, before any `await`.
 - `processOnce` reclaims rows whose lease expired (crash recovery), and startup resets all `uploading` rows to `pending`.
@@ -76,9 +76,9 @@ Each accepted bundle creates one outbox row per configured target (`null` or `fo
 
 Backoff is exponential: `min(60s, 1s * 2^(attempts-1))`. After 10 attempts the row becomes `failed` with `last_error`. This proves the pipeline without network calls.
 
-`ReplicaTarget` is the seam for a future Storage Abstraction Layer (SAL) and SaaS sequencing. No cloud code exists in v0.
+`ReplicaTarget` is retained for the legacy batching path. The B1 `StorageAdapter` is the Storage Abstraction Layer (SAL) seam: `connect`, `disconnect`, `healthCheck`, bundle snapshot/closing-pack/manifest object operations. Adapters are `MemoryAdapter`, `LocalFolderAdapter`, `NullStorageAdapter` and opt-in `GoogleDriveAdapter`. A paused adapter (revoked token) makes `StorageAdapterTarget.isPaused()` true so batching skips uploads until reconnect.
 
-## Migrations v1 → v2 → v3
+## Migrations v1 → v6
 
 Migration v2 is additive and idempotent:
 
@@ -99,17 +99,40 @@ v3 does **not** recompute chain values; v2 already did that. Old pending bundles
 
 **v2's one-time rehash still invalidates replica files produced by v0.1.0.** Delete replica folders and re-export them after upgrading even though v3 cleans the event leak.
 
-## Future SAL / SaaS mapping
+v4–v5 add appliance setup/session/pairing state and encrypted QR payload storage. v6 adds the `issued_numbers` ledger (unique `(doc_type,prefix,number)` and `idempotency_key`) plus quota columns on `number_blocks` for the Hub number relay.
 
-- `global_bundle_id` will hold SaaS sequence.
-- Manifest fields `latestSnapshotId`, `latestClosedPeriod` are reserved for future snapshot/period closure.
-- `number_blocks` reserved for v1 number relay.
-- `signature` reserved for bundle authenticity.
+## Implemented SAL / SaaS mapping
+
+- `global_bundle_id` holds the SaaS sequence assigned by the metadata-only `/sync/sequence` client.
+- `latestSnapshotId` / `latestClosedPeriod` are written by the recovery service and uploaded with each manifest.
+- `number_blocks` / `issued_numbers` back the delegated number relay; blocks stay contiguous per prefix, numbers are never reused, and void/abandoned states are recorded.
+- `signature` remains reserved (ignored) — no authenticity layer yet.
+
+## Snapshot, closing pack and rebuild
+
+- Snapshot object: `snap-<id>.json` — projection/event references plus a chain checkpoint (`latestAcceptedSeq`, `latestHubSeq`, `latestChainHash`, bundle head).
+- Closing pack: `close-YYYY-MM.json` — period checkpoint with ledger/category hashes and bundle range (PRD §25).
+- Manifest: `manifest-<replicaId>.json` (adapter keys carry the replica id in JSON; the connector appends the object name).
+- Rebuild (PRD §26): restore snapshot event references, replay accepted bundles after the snapshot horizon, verify the chain, validate manifest and closing pack, then return a result. The drill in `test/replica-recovery.test.ts` deletes derived `events` in a temp copy and compares chain result and status.
+
+## Replica health and gating
+
+Good/warning/critical levels come from chain verification, adapter health, manifest alignment, recovery-point presence and items needing review. All user-facing text is plain operational language. `CRITICAL` blocks new number issuance (`NUM-009`); `WARNING` allows work and adds a warning field.
+
+## Google Drive adapter
+
+Opt-in via `storage.adapter=google-drive`. Uses drive.file scope only, `appDataFolder`, object names `b-<seq padded 10>-<id>.json`, `snap-*`, `close-YYYY-MM.json`, `manifest-<replicaId>.json`. Token file is mode `0600`; refresh is silent; revocation pauses sync with a plain reconnect message. Calls are serialized per adapter (one company) and retried with exponential backoff. Tests use a fake Google API only — no real OAuth flow or token.
+
+## SaaS boundary
+
+`POST /sync/sequence` sends exactly seven metadata fields; payload bytes never leave the Hub. In `hub_required` mode `assertHubOriginAllowed` rejects `hub_origin=false` locally (`SAAS-003`) before any network call. Device→Hub relay uploads remain accepted in hub_required mode because that path is the sanctioned relay; direct Device→Drive fallback is deliberately not implemented (PRD §19.4 resolved as queue-not-direct).
 
 ## Security model
 
 - Bearer tokens only; no cookies, no CSRF surface.
 - Timing-safe token comparison; SHA-256 token hashes only.
 - Rate limits per device token and per IP (in-memory token bucket, idle buckets evicted after 10 min, capped at 10,000 buckets).
-- Body capped at 5 MB; non-JSON content types rejected.
+- Body capped at 5 MB; non-JSON content types rejected (5 MB -> `413 BUNDLE-007`, wrong content type -> `415 BUNDLE-001`).
+- Input schemas use zod 4.6.7; production audit is clean (GHSA-mrhx-c7xc-m3w5 remediated). Validation semantics and error codes are unchanged.
 - Logs redact authorization, tokens, and payloads. No payload at info level.
+- Device/Hub machine tokens and the Google refresh token live in separate `0600` files, not in SQLite or config JSON.

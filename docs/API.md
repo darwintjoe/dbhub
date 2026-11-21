@@ -137,6 +137,47 @@ curl http://localhost:8787/api/v1/status \
 
 `chain.latestAcceptedSeq` is the chain head. `chain.latestHubSeq` remains the maximum insertion-order `hubSeq` and may be larger after out-of-order resolution.
 
+`dataSafety` is a plain-language health summary: `{ level: "GOOD"|"WARNING"|"CRITICAL", score, label, message, action }`. No raw integrity/storage terms are exposed here. `CRITICAL` blocks new number issuance (`503 NUM-009`); `WARNING` allows normal work.
+
+## Number relay (device)
+
+All endpoints require a device bearer token.
+
+```bash
+curl "http://localhost:8787/api/v1/numbers/next?doc_type=INV&prefix=A&idempotency_key=<key>" \
+  -H "Authorization: Bearer $DEVICE_TOKEN"
+curl -X POST http://localhost:8787/api/v1/numbers/next \
+  -H "Authorization: Bearer $DEVICE_TOKEN" -H "Content-Type: application/json" \
+  -d '{"doc_type":"INV","prefix":"A","idempotency_key":"<key>"}'
+```
+
+- `POST /api/v1/numbers/block` `{doc_type,prefix,size}` -> delegated block (201).
+- `GET /api/v1/numbers/block` -> `{blocks:[...]}` with issued/voided/abandoned/consumed counts.
+- `GET /api/v1/numbers/block/:id` -> single block status (404 `NUM-008`).
+- `POST /api/v1/numbers/reconcile` `{block_id,consumed:[],voided:[]}` -> reconciled status; closes unreported gaps as abandoned.
+- `POST /api/v1/numbers/void` `{idempotency_key}` -> records a voided number.
+- `POST /api/v1/numbers/abandon` `{block_id}` -> abandons a block.
+
+Errors: `NUM-001` invalid input (400), `NUM-002` key reused for another document (400), `NUM-004` no delegated block / offline exhaustion (503), `NUM-005` quota exhausted (503), `NUM-006` voided/abandoned number replay (409), `NUM-007` non-contiguous block (400), `NUM-008` not found (404), `NUM-009` issuance paused by CRITICAL health (503).
+
+Numbers are gapless within a prefix, never reused, and delegated from SaaS through the same machine-token client used for sequencing. The fazai-side request contract is exported in `src/services/numbers/w3-contract.ts` only; no fazai code was changed.
+
+## Admin: recovery
+
+Requires admin token. Uses the configured `StorageAdapter` (memory/local-folder by default; opt-in Google Drive).
+
+- `POST /api/v1/admin/recovery/snapshot` -> `{snapshotId,uri,eventCount}` (201).
+- `GET /api/v1/admin/recovery/snapshot` -> snapshot object (404 `RECOVER-002` if none).
+- `POST /api/v1/admin/recovery/closing-pack/:period` (`YYYY-MM`) -> `{period,uri,hash}` (201).
+- `GET /api/v1/admin/recovery/closing-pack/:period` -> closing pack object.
+- `POST /api/v1/admin/recovery/rebuild` -> `{ok,snapshotId,eventsRestored,bundlesReplayed,chain,manifestValid,closingPacksValid}`; rebuilds from snapshot + post-snapshot bundles + closing pack + manifest.
+
+Rebuild failures return `RECOVER-002` (no recovery point) or `RECOVER-003` (validation did not pass).
+
+## SaaS boundary (Profile B)
+
+`/sync/sequence` receives metadata only: `bundle_id`, `prev_hash`, `payload_hash`, `drive_uri`, `event_count`, `device_id`, `hub_origin`. Payload bytes never leave the Hub. In `hub_required` mode the sequencer client rejects `hub_origin=false` locally (`SAAS-003`) before any request. Device→Hub relay uploads are accepted in hub_required mode because that is the sanctioned relay path.
+
 ## Dashboard
 
 ```bash
